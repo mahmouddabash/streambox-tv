@@ -1,9 +1,18 @@
 package com.streambox.tv.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.Dns
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.dnsoverhttps.DnsOverHttps
 import java.io.File
 import java.io.IOException
+import java.net.ConnectException
+import java.net.InetAddress
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /** HTTP error with its status code, so callers can react to 403 etc. */
@@ -23,8 +32,70 @@ object Net {
 
     fun userAgent(): String = Prefs.userAgent.ifBlank { DEFAULT_UA }
 
+    /** Plain client for DNS-over-HTTPS lookups and connectivity checks (must not use [FallbackDns] itself). */
+    private val bootstrap: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(8, TimeUnit.SECONDS)
+            .build()
+    }
+
+    private fun doh(url: String, vararg ips: String): Dns =
+        DnsOverHttps.Builder()
+            .client(bootstrap)
+            .url(url.toHttpUrl())
+            .bootstrapDnsHosts(ips.map { InetAddress.getByName(it) })
+            .build()
+
+    private val dohResolvers: List<Dns> by lazy {
+        listOf(
+            doh("https://cloudflare-dns.com/dns-query", "1.1.1.1", "1.0.0.1"),
+            doh("https://dns.google/dns-query", "8.8.8.8", "8.8.4.4")
+        )
+    }
+
+    /** System DNS first; if the TV's/router's resolver can't find the host, ask public resolvers over HTTPS. */
+    private object FallbackDns : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            try {
+                val result = Dns.SYSTEM.lookup(hostname)
+                if (result.isNotEmpty()) return result
+            } catch (_: UnknownHostException) {
+            }
+            for (resolver in dohResolvers) {
+                try {
+                    val result = resolver.lookup(hostname)
+                    if (result.isNotEmpty()) return result
+                } catch (_: Exception) {
+                }
+            }
+            throw UnknownHostException("Unable to resolve host \"$hostname\"")
+        }
+    }
+
+    private fun online(): Boolean =
+        listOf("https://www.gstatic.com/generate_204", "https://1.1.1.1/").any { url ->
+            try {
+                bootstrap.newCall(Request.Builder().url(url).head().build()).execute().use { true }
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+    /** Turns a connection failure into a message that says whether the TV or the server is at fault. */
+    suspend fun explain(e: Throwable): String = withContext(Dispatchers.IO) {
+        val raw = e.message ?: "network error"
+        val unreachable = e is UnknownHostException || e is SocketTimeoutException || e is ConnectException
+        when {
+            !unreachable -> raw
+            online() -> "the TV is online but cannot reach this server. It may be blocked on this network, or the server is down. ($raw)"
+            else -> "the TV has no internet connection. Check its Wi-Fi or cable. ($raw)"
+        }
+    }
+
     val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .dns(FallbackDns)
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(90, TimeUnit.SECONDS)
             .followRedirects(true)

@@ -9,6 +9,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.streambox.tv.R
+import com.streambox.tv.data.Net
 import com.streambox.tv.data.PairingServer
 import com.streambox.tv.data.Profile
 import com.streambox.tv.data.Prefs
@@ -147,7 +148,7 @@ class AddProfileActivity : AppCompatActivity() {
                 toast("Profile saved")
                 finish()
             } catch (e: Exception) {
-                status.text = "Could not sign in: ${e.message ?: "network error"}"
+                status.text = "Could not sign in: ${Net.explain(e)}"
                 btnSave.isEnabled = true
                 saving = false
             }
