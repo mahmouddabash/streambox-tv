@@ -35,11 +35,15 @@
             <Button
                 android:id="@+id/tabXtream"
                 style="@style/Btn"
+                android:drawableStart="@drawable/ic_xtream"
+                android:drawablePadding="10dp"
                 android:text="Xtream Codes login" />
 
             <Button
                 android:id="@+id/tabM3u"
                 style="@style/Btn"
+                android:drawableStart="@drawable/ic_playlist"
+                android:drawablePadding="10dp"
                 android:text="M3U playlist URL" />
         </LinearLayout>
 

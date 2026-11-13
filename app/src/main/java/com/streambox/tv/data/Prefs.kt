@@ -15,6 +15,25 @@ object Prefs {
 
     fun init(context: Context) {
         sp = context.applicationContext.getSharedPreferences("streambox", Context.MODE_PRIVATE)
+        seedDefaultProfile()
+    }
+
+    /** Adds the built-in playlist once on first launch; deleting it afterwards keeps it deleted. */
+    private fun seedDefaultProfile() {
+        if (sp.getBoolean("defaultSeeded", false)) return
+        if (profiles().none { it.id == "default" }) {
+            addProfile(
+                Profile(
+                    id = "default",
+                    name = "My IPTV",
+                    type = Profile.TYPE_XTREAM,
+                    server = "https://6699.info",
+                    username = "sa0165",
+                    password = "01069979654"
+                )
+            )
+        }
+        sp.edit().putBoolean("defaultSeeded", true).apply()
     }
 
     // ---------- Profiles ----------
