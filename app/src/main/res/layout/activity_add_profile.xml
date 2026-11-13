@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="560dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingTop="28dp"
+        android:paddingBottom="28dp">
+
+        <TextView
+            style="@style/Title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Add profile" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/tabXtream"
+                style="@style/Btn"
+                android:text="Xtream Codes login" />
+
+            <Button
+                android:id="@+id/tabM3u"
+                style="@style/Btn"
+                android:text="M3U playlist URL" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/name"
+            style="@style/Input"
+            android:hint="Profile name (anything you like)"
+            android:inputType="textCapWords" />
+
+        <LinearLayout
+            android:id="@+id/xtreamFields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/server"
+                style="@style/Input"
+                android:hint="Server URL, e.g. http://example.com:8080"
+                android:inputType="textUri" />
+
+            <EditText
+                android:id="@+id/username"
+                style="@style/Input"
+                android:hint="Username"
+                android:inputType="textNoSuggestions" />
+
+            <EditText
+                android:id="@+id/password"
+                style="@style/Input"
+                android:hint="Password"
+                android:inputType="textPassword" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/m3uFields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/m3uUrl"
+                style="@style/Input"
+                android:hint="Playlist URL (.m3u / .m3u8)"
+                android:inputType="textUri" />
+
+            <EditText
+                android:id="@+id/epgUrl"
+                style="@style/Input"
+                android:hint="EPG URL (XMLTV, optional)"
+                android:inputType="textUri" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:textColor="@color/gold"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnSave"
+                style="@style/Btn"
+                android:text="Save profile" />
+
+            <Button
+                android:id="@+id/btnCancel"
+                style="@style/Btn"
+                android:text="Cancel" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
