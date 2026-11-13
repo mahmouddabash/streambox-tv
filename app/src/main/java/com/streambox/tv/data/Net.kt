@@ -7,9 +7,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.dnsoverhttps.DnsOverHttps
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.net.ConnectException
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.IDN
 import java.net.InetAddress
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -54,22 +58,80 @@ object Net {
         )
     }
 
-    /** System DNS first; if the TV's/router's resolver can't find the host, ask public resolvers over HTTPS. */
+    private fun u16(b: ByteArray, i: Int): Int = ((b[i].toInt() and 0xFF) shl 8) or (b[i + 1].toInt() and 0xFF)
+
+    private fun skipName(b: ByteArray, start: Int): Int {
+        var pos = start
+        while (true) {
+            val len = b[pos].toInt() and 0xFF
+            if (len == 0) return pos + 1
+            if (len and 0xC0 == 0xC0) return pos + 2
+            pos += len + 1
+        }
+    }
+
+    /** Minimal plain DNS A-record query over UDP straight to a public resolver (what `nslookup host 8.8.8.8` does). */
+    private fun udpLookup(hostname: String, server: String): List<InetAddress> {
+        val id = (System.nanoTime() and 0xFFFF).toInt()
+        val q = ByteArrayOutputStream()
+        q.write(id shr 8); q.write(id and 0xFF)
+        q.write(byteArrayOf(1, 0, 0, 1, 0, 0, 0, 0, 0, 0))
+        for (label in IDN.toASCII(hostname).trimEnd('.').split('.')) {
+            val bytes = label.toByteArray(Charsets.US_ASCII)
+            if (bytes.isEmpty() || bytes.size > 63) throw UnknownHostException(hostname)
+            q.write(bytes.size); q.write(bytes)
+        }
+        q.write(byteArrayOf(0, 0, 1, 0, 1))
+        val query = q.toByteArray()
+
+        DatagramSocket().use { socket ->
+            socket.soTimeout = 3000
+            socket.send(DatagramPacket(query, query.size, InetAddress.getByName(server), 53))
+            val buf = ByteArray(1500)
+            val packet = DatagramPacket(buf, buf.size)
+            socket.receive(packet)
+            val b = buf.copyOf(packet.length)
+            if (u16(b, 0) != id) throw IOException("mismatched reply")
+            val rcode = b[3].toInt() and 0x0F
+            if (rcode != 0) throw IOException("rcode $rcode")
+            var pos = 12
+            repeat(u16(b, 4)) { pos = skipName(b, pos) + 4 }
+            val out = ArrayList<InetAddress>()
+            repeat(u16(b, 6)) {
+                pos = skipName(b, pos)
+                val type = u16(b, pos)
+                val len = u16(b, pos + 8)
+                pos += 10
+                if (type == 1 && len == 4) out.add(InetAddress.getByAddress(hostname, b.copyOfRange(pos, pos + 4)))
+                pos += len
+            }
+            return out
+        }
+    }
+
+    /**
+     * System DNS first. If the TV's/router's resolver can't find the host, ask public resolvers
+     * directly over UDP, then over HTTPS. The error lists why each step failed.
+     */
     private object FallbackDns : Dns {
         override fun lookup(hostname: String): List<InetAddress> {
-            try {
-                val result = Dns.SYSTEM.lookup(hostname)
-                if (result.isNotEmpty()) return result
-            } catch (_: UnknownHostException) {
-            }
-            for (resolver in dohResolvers) {
+            val why = ArrayList<String>()
+            fun attempt(label: String, block: () -> List<InetAddress>): List<InetAddress>? =
                 try {
-                    val result = resolver.lookup(hostname)
-                    if (result.isNotEmpty()) return result
-                } catch (_: Exception) {
+                    block().ifEmpty { why.add("$label: no address"); null }
+                } catch (e: Exception) {
+                    why.add("$label: ${e.javaClass.simpleName}")
+                    null
                 }
+
+            attempt("system") { Dns.SYSTEM.lookup(hostname) }?.let { return it }
+            for (server in listOf("8.8.8.8", "1.1.1.1", "9.9.9.9")) {
+                attempt("udp $server") { udpLookup(hostname, server) }?.let { return it }
             }
-            throw UnknownHostException("Unable to resolve host \"$hostname\"")
+            dohResolvers.forEachIndexed { i, resolver ->
+                attempt("https ${i + 1}") { resolver.lookup(hostname) }?.let { return it }
+            }
+            throw UnknownHostException("Unable to resolve host \"$hostname\" [${why.joinToString("; ")}]")
         }
     }
 
