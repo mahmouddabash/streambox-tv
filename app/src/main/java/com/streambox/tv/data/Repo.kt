@@ -117,7 +117,7 @@ object Repo {
     /** Checks the credentials. Throws IOException with a readable message on failure. */
     suspend fun authenticate(p: Profile): AccountInfo = withContext(Dispatchers.IO) {
         if (!p.isXtream) return@withContext AccountInfo(status = "Playlist")
-        val body = Net.getString(api(p))
+        val body = getWithAcceptedUserAgent(api(p))
         val root = try {
             JSONObject(body)
         } catch (e: Exception) {
@@ -133,6 +133,40 @@ object Repo {
             expiryMs = exp * 1000L,
             maxConnections = u.optString("max_connections", ""),
             activeConnections = u.optString("active_cons", "")
+        )
+    }
+
+    /**
+     * Many providers refuse players they do not recognise (HTTP 403). When that happens, retry with
+     * common player User-Agents and remember the first one the server accepts.
+     */
+    private fun getWithAcceptedUserAgent(url: String): String {
+        val refused = setOf(401, 403, 406, 451)
+        try {
+            return Net.getString(url)
+        } catch (e: HttpException) {
+            if (e.code !in refused) throw e
+        }
+        val saved = Prefs.userAgent
+        for (ua in Net.FALLBACK_UAS) {
+            if (ua == saved) continue
+            Prefs.userAgent = ua
+            try {
+                return Net.getString(url)
+            } catch (e: HttpException) {
+                if (e.code !in refused) {
+                    Prefs.userAgent = saved
+                    throw e
+                }
+            } catch (e: IOException) {
+                Prefs.userAgent = saved
+                throw e
+            }
+        }
+        Prefs.userAgent = saved
+        throw IOException(
+            "the server refused this app (HTTP 403). Check the server URL and port, or ask your provider " +
+                "whether your network or this player is blocked"
         )
     }
 

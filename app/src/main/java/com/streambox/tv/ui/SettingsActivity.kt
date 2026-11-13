@@ -72,11 +72,23 @@ class SettingsActivity : AppCompatActivity() {
                 Prefs.cacheHours = values[it]
             }
         })
-        rows.add(Row("User-Agent", Prefs.userAgent.ifBlank { "Default (${Net.DEFAULT_UA})" }) {
-            Ui.input(this, "User-Agent (empty = default)", Prefs.userAgent, InputType.TYPE_CLASS_TEXT) {
-                Prefs.userAgent = it
-                refresh()
-            }
+        rows.add(Row("Player identity (User-Agent)", Prefs.userAgent.ifBlank { "Default (${Net.DEFAULT_UA})" }) {
+            val presets = listOf("") + Net.FALLBACK_UAS
+            val labels = presets.map { if (it.isEmpty()) "Default" else it.take(48) } + "Custom…"
+            AlertDialog.Builder(this)
+                .setTitle("Player identity (User-Agent)")
+                .setItems(labels.toTypedArray()) { _, which ->
+                    if (which < presets.size) {
+                        Prefs.userAgent = presets[which]
+                        refresh()
+                    } else {
+                        Ui.input(this, "User-Agent", Prefs.userAgent, InputType.TYPE_CLASS_TEXT) {
+                            Prefs.userAgent = it
+                            refresh()
+                        }
+                    }
+                }
+                .show()
         })
         rows.add(Row("Parental control", if (Prefs.parentalEnabled) "PIN is set. Adult categories and locked categories ask for it" else "Off. Set a PIN to lock categories") {
             parental()
