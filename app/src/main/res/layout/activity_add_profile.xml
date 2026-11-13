@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:gravity="center_horizontal"
+    android:orientation="horizontal"
+    android:paddingLeft="32dp"
+    android:paddingRight="32dp">
 
+<ScrollView
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:fillViewport="true">
     <LinearLayout
-        android:layout_width="560dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
         android:orientation="vertical"
         android:paddingTop="28dp"
         android:paddingBottom="28dp">
@@ -112,3 +119,40 @@
         </LinearLayout>
     </LinearLayout>
 </ScrollView>
+
+    <LinearLayout
+        android:id="@+id/qrPanel"
+        android:layout_width="300dp"
+        android:layout_height="match_parent"
+        android:layout_marginLeft="32dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Or type on your phone"
+            android:textColor="@color/text"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/qrImage"
+            android:layout_width="230dp"
+            android:layout_height="230dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="@android:color/white"
+            android:padding="4dp" />
+
+        <TextView
+            android:id="@+id/qrHelp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:lineSpacingExtra="3dp"
+            android:textColor="@color/text_dim"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

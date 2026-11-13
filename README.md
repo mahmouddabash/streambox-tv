@@ -7,7 +7,7 @@ It contains no channels or content. You add the Xtream Codes login or M3U playli
 
 | Area | What it does |
 |---|---|
-| Profiles | Multiple profiles, Xtream Codes API login or M3U URL (+ optional XMLTV EPG URL), account status / expiry / connections |
+| Profiles | **Add from your phone by scanning a QR code** (phone and TV on the same Wi-Fi), multiple profiles, Xtream Codes API login or M3U URL (+ optional XMLTV EPG URL), account status / expiry / connections |
 | Live TV | Categories, channel list with logos, search, favourites, recently watched, in-list preview, full-screen zapping (▲▼ / CH±), auto-reconnect |
 | TV guide | Now/next overlay in the player, per-channel guide; Xtream short EPG or XMLTV (plain or .gz) for M3U |
 | Catch-up | Past programmes of archive channels play through the Xtream timeshift API |
