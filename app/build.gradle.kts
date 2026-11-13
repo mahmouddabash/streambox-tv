@@ -15,6 +15,17 @@ android {
         versionName = "1.0"
     }
 
+    // Fixed key committed to the repo so every CI build has the same signature
+    // and installs over the previous one without an uninstall.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("streambox.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
