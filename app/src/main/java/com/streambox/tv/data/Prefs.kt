@@ -96,6 +96,14 @@ object Prefs {
         get() = sp.getInt("epgShift", 0)
         set(v) = sp.edit().putInt("epgShift", v).apply()
 
+    var lastProfileId: String
+        get() = sp.getString("lastProfile", "") ?: ""
+        set(v) = sp.edit().putString("lastProfile", v).apply()
+
+    var openLastProfile: Boolean
+        get() = sp.getBoolean("openLastProfile", true)
+        set(v) = sp.edit().putBoolean("openLastProfile", v).apply()
+
     var pin: String
         get() = sp.getString("pin", "") ?: ""
         set(v) = sp.edit().putString("pin", v).apply()

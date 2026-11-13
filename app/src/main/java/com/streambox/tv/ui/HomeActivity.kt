@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.streambox.tv.R
 import com.streambox.tv.data.Prefs
+import com.streambox.tv.data.PlayItem
 import com.streambox.tv.data.Profile
 import com.streambox.tv.data.Repo
 import kotlinx.coroutines.launch
@@ -34,6 +35,7 @@ class HomeActivity : AppCompatActivity() {
             return
         }
         profile = p
+        Prefs.lastProfileId = p.id
         status = findViewById(R.id.status)
         progress = findViewById(R.id.progress)
         findViewById<TextView>(R.id.profileName).text = p.name
@@ -53,6 +55,11 @@ class HomeActivity : AppCompatActivity() {
             if (Repo.series.isEmpty()) toast("This profile has no series")
             else startActivity(Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_SERIES))
         }
+        findViewById<Button>(R.id.tileGuide).setOnClickListener {
+            if (!Repo.hasEpgSource) toast("This profile has no TV guide")
+            else startActivity(Intent(this, EpgGridActivity::class.java))
+        }
+        findViewById<Button>(R.id.tileResume).setOnClickListener { resumeLast() }
         catchup.setOnClickListener {
             if (Repo.channels.none { it.hasArchive }) toast("Your provider offers no catch-up channels")
             else startActivity(Intent(this, LiveActivity::class.java).putExtra(LiveActivity.EXTRA_ARCHIVE_ONLY, true))
@@ -86,6 +93,30 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
+    private fun resumeLast() {
+        val all = Repo.channelsIn(Repo.CAT_ALL)
+        val lastId = Prefs.recentChannels(profile.id).firstOrNull()
+        val idx = all.indexOfFirst { it.id == lastId }
+        if (idx < 0) {
+            toast("No recently watched channel yet")
+            return
+        }
+        val items = all.map { PlayItem("", it.name, Repo.urlFor(it), true, it.id) }
+        Ui.play(this, items, idx)
+    }
+
+    private fun refreshResumeTile() {
+        val tile = findViewById<Button>(R.id.tileResume)
+        val lastId = Prefs.recentChannels(profile.id).firstOrNull()
+        val ch = lastId?.let { Repo.channel(it) }
+        if (ch == null) {
+            tile.visibility = android.view.View.GONE
+        } else {
+            tile.visibility = android.view.View.VISIBLE
+            tile.text = "▶ Resume\n${ch.name}"
+        }
+    }
+
     private fun showLoaded() {
         val n = NumberFormat.getIntegerInstance()
         status.text = ""
@@ -101,7 +132,13 @@ class HomeActivity : AppCompatActivity() {
         if (a.expiryMs > 0) parts.add("Expires ${Ui.date(a.expiryMs)}")
         if (a.maxConnections.isNotEmpty()) parts.add("Connections ${a.activeConnections.ifEmpty { "0" }}/${a.maxConnections}")
         findViewById<TextView>(R.id.accountInfo).text = parts.joinToString("  •  ")
+        refreshResumeTile()
         findViewById<Button>(R.id.tileLive).requestFocus()
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        if (Repo.loaded && Repo.profileId == profile.id) refreshResumeTile()
     }
 
     companion object {

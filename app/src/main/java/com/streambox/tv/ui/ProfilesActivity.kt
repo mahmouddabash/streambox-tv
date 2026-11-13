@@ -16,7 +16,14 @@ import com.streambox.tv.data.Repo
 
 class ProfilesActivity : AppCompatActivity() {
 
+    companion object {
+        /** Set once per app process so Back from Home returns here instead of relaunching the profile. */
+        var autoOpened = false
+    }
+
+
     private lateinit var adapter: SimpleAdapter<Profile>
+
     private lateinit var empty: TextView
     private lateinit var btnAdd: Button
 
@@ -45,6 +52,17 @@ class ProfilesActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         reload()
+        maybeOpenLast()
+    }
+
+    /** Jumps straight into the last-used profile on a fresh launch, so the remote starts one step in. */
+    private fun maybeOpenLast() {
+        if (autoOpened) return
+        autoOpened = true
+        if (!Prefs.openLastProfile) return
+        val last = Prefs.lastProfileId
+        val p = Prefs.profiles().firstOrNull { it.id == last } ?: return
+        open(p)
     }
 
     private fun reload() {

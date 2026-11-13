@@ -9,13 +9,14 @@ It contains no channels or content. You add the Xtream Codes login or M3U playli
 |---|---|
 | Profiles | **Add from your phone by scanning a QR code** (phone and TV on the same Wi-Fi), multiple profiles, Xtream Codes API login or M3U URL (+ optional XMLTV EPG URL), account status / expiry / connections |
 | Live TV | Categories, channel list with logos, search, favourites, recently watched, in-list preview, full-screen zapping (▲▼ / CH±), auto-reconnect |
-| TV guide | Now/next overlay in the player, per-channel guide; Xtream short EPG or XMLTV (plain or .gz) for M3U |
+| TV guide | **Multi-channel guide grid** (channels down, programmes across), now/next overlay in the player, per-channel guide; Xtream short EPG or XMLTV (plain or .gz) for M3U |
 | Catch-up | Past programmes of archive channels play through the Xtream timeshift API |
 | Movies | Poster grid, search, favourites, details (plot, cast, rating), resume from where you stopped |
 | Series | Seasons and episodes, resume markers, auto-play next episode |
 | Player | HLS / MPEG-TS / DASH / MP4 / MKV, audio-track and subtitle selection, aspect ratio, playback speed, optional external player (VLC, MX…) |
 | Parental control | PIN; adult-named categories lock automatically, any category can be locked (hold OK on it) |
-| Settings | Stream format (.ts / .m3u8), time format, EPG time shift, refresh interval, custom User-Agent, clear cache |
+| Startup | Jumps into the last-used profile and pre-selects the last-watched channel; a **Resume** tile replays it in one click |
+| Settings | Stream format (.ts / .m3u8), open-last-profile toggle, time format, EPG time shift, refresh interval, player identity (User-Agent), clear cache |
 
 ## Build
 
@@ -24,6 +25,14 @@ It contains no channels or content. You add the Xtream Codes login or M3U playli
 3. *Build → Build App Bundle(s) / APK(s) → Build APK(s)*. The file lands in `app/build/outputs/apk/debug/app-debug.apk`.
 
 Command line alternative: `./gradlew assembleDebug` (needs JDK 17 and the Android SDK; set `sdk.dir` in `local.properties`).
+
+## Download a ready-made APK
+
+Every push builds the APK and publishes it as a GitHub Release. The newest build is always at:
+
+**https://github.com/mahmouddabash/streambox-tv/releases/latest/download/StreamBoxTV.apk**
+
+Open that link on the TV's browser (or the download bar of a sideload app) to get the APK directly — no unzipping.
 
 ## Install on a TV
 

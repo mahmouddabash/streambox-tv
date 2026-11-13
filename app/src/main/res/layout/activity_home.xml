@@ -62,6 +62,7 @@
         android:orientation="horizontal">
 
         <Button android:id="@+id/tileLive" style="@style/Tile" android:text="LIVE TV" />
+        <Button android:id="@+id/tileGuide" style="@style/Tile" android:text="TV GUIDE" />
         <Button android:id="@+id/tileMovies" style="@style/Tile" android:text="MOVIES" />
         <Button android:id="@+id/tileSeries" style="@style/Tile" android:text="SERIES" />
     </LinearLayout>
@@ -72,6 +73,7 @@
         android:layout_weight="1"
         android:orientation="horizontal">
 
+        <Button android:id="@+id/tileResume" style="@style/SmallTile" android:text="Resume" android:visibility="gone" />
         <Button android:id="@+id/tileCatchup" style="@style/SmallTile" android:text="Catch-up" />
         <Button android:id="@+id/tileSettings" style="@style/SmallTile" android:text="Settings" />
         <Button android:id="@+id/tileRefresh" style="@style/SmallTile" android:text="Refresh content" />

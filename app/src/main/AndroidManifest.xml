@@ -36,6 +36,7 @@
         <activity android:name=".ui.MovieDetailActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.SeriesDetailActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.EpgActivity" android:screenOrientation="landscape" />
+        <activity android:name=".ui.EpgGridActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.SettingsActivity" android:screenOrientation="landscape" />
         <activity
             android:name=".ui.PlayerActivity"

@@ -121,6 +121,7 @@ class LiveActivity : AppCompatActivity() {
 
         catAdapter.submit(categories(), 0)
         showCategory(Repo.CAT_ALL)
+        if (!archiveOnly) preselectLast()
         catView.post { catView.requestFocus() }
     }
 
@@ -143,6 +144,17 @@ class LiveActivity : AppCompatActivity() {
         favs = Prefs.favourites(Repo.profileId, Prefs.FAV_LIVE)
         catChannels = Repo.channelsIn(id, archiveOnly)
         applyFilter()
+    }
+
+    /** Highlights and scrolls to the channel watched most recently, without starting a stream. */
+    private fun preselectLast() {
+        val lastId = Prefs.recentChannels(Repo.profileId).firstOrNull() ?: return
+        val idx = chAdapter.items.indexOfFirst { it.id == lastId }
+        if (idx < 0) return
+        chAdapter.select(idx)
+        channelsView.post {
+            (channelsView.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, 80)
+        }
     }
 
     private fun applyFilter() {

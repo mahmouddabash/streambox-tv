@@ -55,6 +55,10 @@ class SettingsActivity : AppCompatActivity() {
             Prefs.previewEnabled = !Prefs.previewEnabled
             refresh()
         })
+        rows.add(Row("Open last profile on startup", if (Prefs.openLastProfile) "On" else "Off: always show the profile list") {
+            Prefs.openLastProfile = !Prefs.openLastProfile
+            refresh()
+        })
         rows.add(Row("Time format", if (Prefs.use24h) "24-hour" else "12-hour") {
             Prefs.use24h = !Prefs.use24h
             refresh()
