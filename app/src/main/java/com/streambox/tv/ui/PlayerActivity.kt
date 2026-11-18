@@ -67,6 +67,9 @@ class PlayerActivity : AppCompatActivity() {
     private var firstProbe: StreamProbe.Result? = null
     private var probeJob: Job? = null
     private var failed = false
+    private var attemptMime: String? = null
+    /** Set when the GPU could not run the picture filter; playback continues without it. */
+    private var effectsDisabled = false
 
     private val handler = Handler(Looper.getMainLooper())
     private val hideOverlay = Runnable { overlay.visibility = View.GONE }
@@ -107,11 +110,36 @@ class PlayerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (items.isEmpty()) return
+        createPlayer()
+        startItem(resume = !fromStart)
+    }
+
+    private fun createPlayer() {
         val p = PlayerFactory.build(this)
+        if (!effectsDisabled) {
+            val fx = PlayerFactory.effects()
+            if (fx.isNotEmpty()) {
+                try {
+                    p.setVideoEffects(fx)
+                } catch (_: Exception) {
+                    effectsDisabled = true
+                }
+            }
+        }
         player = p
         playerView.player = p
         p.addListener(listener)
-        startItem(resume = !fromStart)
+    }
+
+    /** Rebuilds the player (new picture mode / quality setting) and continues at the same spot. */
+    private fun rebuildPlayer() {
+        val old = player ?: return
+        if (!current.isLive) startPos = old.currentPosition
+        playerView.player = null
+        old.removeListener(listener)
+        old.release()
+        createPlayer()
+        load(attemptUrl, attemptMime)
     }
 
     override fun onStop() {
@@ -153,6 +181,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun load(url: String, mimeType: String?) {
         val p = player ?: return
         attemptUrl = url
+        attemptMime = mimeType
         p.setMediaItem(PlayerFactory.mediaItem(url, mimeType))
         if (startPos > 0) p.seekTo(startPos)
         p.prepare()
@@ -285,7 +314,12 @@ class PlayerActivity : AppCompatActivity() {
 
         override fun onPlayerError(error: PlaybackException) {
             val item = current
-            if (isParsingError(error) && recoverySteps < 3) {
+            if (error.errorCode in 7000..7999 && !effectsDisabled) {
+                // The TV's graphics chip could not run the picture filter: play without it.
+                effectsDisabled = true
+                toast("Picture enhancement isn't supported on this device, playing the original picture")
+                handler.post { rebuildPlayer() }
+            } else if (isParsingError(error) && recoverySteps < 3) {
                 startPos = if (item.isLive) 0L else maxOf(startPos, player?.currentPosition ?: 0L)
                 recover(error)
             } else if (isParsingError(error)) {
@@ -413,24 +447,60 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun optionsMenu() {
         val p = player ?: return
-        val options = ArrayList<String>()
-        options.add("Audio track")
-        options.add("Subtitles")
-        options.add("Aspect ratio: ${resizeNames[resizeIdx]}")
-        if (!current.isLive) options.add("Playback speed: ${p.playbackParameters.speed}x")
+        val options = ArrayList<Pair<String, () -> Unit>>()
+        val mode = PictureMode.of(Prefs.pictureMode)
+        val pictureLabel = if (effectsDisabled && mode != PictureMode.OFF) "Not supported on this TV" else mode.label.substringBefore(" (")
+        options.add("Picture mode: $pictureLabel" to { pictureMenu() })
+        options.add("Quality: ${qualityLabel(p)}" to { qualityMenu() })
+        options.add("Audio track" to { trackMenu(C.TRACK_TYPE_AUDIO, "Audio track") })
+        options.add("Subtitles" to { trackMenu(C.TRACK_TYPE_TEXT, "Subtitles") })
+        options.add("Aspect ratio: ${resizeNames[resizeIdx]}" to {
+            resizeIdx = (resizeIdx + 1) % resizeModes.size
+            playerView.resizeMode = resizeModes[resizeIdx]
+            toast("Aspect ratio: ${resizeNames[resizeIdx]}")
+        })
+        if (!current.isLive) options.add("Playback speed: ${p.playbackParameters.speed}x" to { speedMenu() })
         AlertDialog.Builder(this)
             .setTitle(current.title)
-            .setItems(options.toTypedArray()) { _, which ->
-                when (which) {
-                    0 -> trackMenu(C.TRACK_TYPE_AUDIO, "Audio track")
-                    1 -> trackMenu(C.TRACK_TYPE_TEXT, "Subtitles")
-                    2 -> {
-                        resizeIdx = (resizeIdx + 1) % resizeModes.size
-                        playerView.resizeMode = resizeModes[resizeIdx]
-                        toast("Aspect ratio: ${resizeNames[resizeIdx]}")
-                    }
-                    3 -> speedMenu()
-                }
+            .setItems(options.map { it.first }.toTypedArray()) { _, which -> options[which].second() }
+            .show()
+    }
+
+    /** "Auto • 1920×1080" style label with the resolution actually playing. */
+    private fun qualityLabel(p: ExoPlayer): String {
+        val f = p.videoFormat
+        val res = if (f != null && f.height > 0) "${f.width}×${f.height}" else ""
+        val mode = if (Prefs.maxQuality) "Highest" else "Auto"
+        return if (res.isEmpty()) mode else "$mode  •  $res"
+    }
+
+    private fun pictureMenu() {
+        val modes = PictureMode.values()
+        val labels = modes.map { it.label }.toTypedArray()
+        val cur = modes.indexOf(PictureMode.of(Prefs.pictureMode))
+        AlertDialog.Builder(this)
+            .setTitle("Picture mode")
+            .setSingleChoiceItems(labels, cur) { d, which ->
+                d.dismiss()
+                if (which == cur && !effectsDisabled) return@setSingleChoiceItems
+                Prefs.pictureMode = modes[which].id
+                effectsDisabled = false
+                rebuildPlayer()
+                toast("Picture mode: ${modes[which].label.substringBefore(" (")}")
+            }
+            .show()
+    }
+
+    private fun qualityMenu() {
+        val labels = arrayOf("Auto (adapts to your connection)", "Always highest quality")
+        AlertDialog.Builder(this)
+            .setTitle("Video quality")
+            .setSingleChoiceItems(labels, if (Prefs.maxQuality) 1 else 0) { d, which ->
+                d.dismiss()
+                val want = which == 1
+                if (want == Prefs.maxQuality) return@setSingleChoiceItems
+                Prefs.maxQuality = want
+                rebuildPlayer()
             }
             .show()
     }

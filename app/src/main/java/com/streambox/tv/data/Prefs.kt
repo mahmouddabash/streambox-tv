@@ -154,6 +154,16 @@ object Prefs {
     fun setLastItem(profileId: String, screen: String, id: String) =
         sp.edit().putString("lastItem_${screen}_$profileId", id).apply()
 
+    /** Picture enhancement preset id (see PictureMode). */
+    var pictureMode: String
+        get() = sp.getString("pictureMode", "enhanced") ?: "enhanced"
+        set(v) = sp.edit().putString("pictureMode", v).apply()
+
+    /** true = always play the highest-quality version of adaptive streams. */
+    var maxQuality: Boolean
+        get() = sp.getBoolean("maxQuality", false)
+        set(v) = sp.edit().putBoolean("maxQuality", v).apply()
+
     var openLastProfile: Boolean
         get() = sp.getBoolean("openLastProfile", true)
         set(v) = sp.edit().putBoolean("openLastProfile", v).apply()

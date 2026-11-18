@@ -13,6 +13,7 @@ It contains no channels or content. You add the Xtream Codes login or M3U playli
 | Catch-up | Past programmes of archive channels play through the Xtream timeshift API |
 | Movies | Poster grid, search, favourites, details (plot, cast, rating), resume from where you stopped |
 | Series | Seasons and episodes, resume markers, auto-play next episode |
+| Picture | **Picture modes** (Enhanced, Vivid, Cinema, Sharp, Original): real-time GPU sharpening, contrast, colour and vibrance; plays the highest-quality stream variant from the start, optional "always highest" |
 | Player | HLS / MPEG-TS / DASH / MP4 / MKV, **auto-detects the real format** when a link sends something else (e.g. HLS behind a .ts/.mp4 link) and shows the server's message if it sends an error page, audio-track and subtitle selection, aspect ratio, playback speed, optional external player (VLC, MX…) |
 | Parental control | PIN; adult-named categories lock automatically, any category can be locked (hold OK on it) |
 | Home | Streaming-service style: animated splash, full-screen hero that follows the focused title (backdrop, rating, year, plot), rows for Continue watching (with progress), recently watched channels, new movies, new series, your series, favourites |

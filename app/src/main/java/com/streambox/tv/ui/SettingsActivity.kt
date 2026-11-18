@@ -47,6 +47,16 @@ class SettingsActivity : AppCompatActivity() {
                 Prefs.streamFormat = if (it == 0) "ts" else "m3u8"
             }
         })
+        rows.add(Row("Picture mode", PictureMode.of(Prefs.pictureMode).label) {
+            val modes = PictureMode.values()
+            choose("Picture mode", modes.map { it.label }.toTypedArray(), modes.indexOf(PictureMode.of(Prefs.pictureMode))) {
+                Prefs.pictureMode = modes[it].id
+            }
+        })
+        rows.add(Row("Video quality", if (Prefs.maxQuality) "Always highest" else "Auto (starts high, adapts to your connection)") {
+            Prefs.maxQuality = !Prefs.maxQuality
+            refresh()
+        })
         rows.add(Row("Player", if (Prefs.externalPlayer) "External player app (VLC, MX Player…)" else "Built-in player") {
             Prefs.externalPlayer = !Prefs.externalPlayer
             refresh()
