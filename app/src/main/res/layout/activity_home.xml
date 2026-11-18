@@ -2,14 +2,26 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:orientation="vertical"
-    android:padding="28dp">
+    android:paddingLeft="44dp"
+    android:paddingTop="30dp"
+    android:paddingRight="44dp"
+    android:paddingBottom="26dp">
 
+    <!-- Header: brand, profile, status, clock -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginRight="16dp"
+            android:src="@drawable/ic_app" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -18,65 +30,100 @@
             android:orientation="vertical">
 
             <TextView
+                style="@style/Eyebrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="StreamBox TV" />
+
+            <TextView
                 android:id="@+id/profileName"
                 style="@style/Title"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:maxLines="1" />
 
             <TextView
                 android:id="@+id/accountInfo"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
                 android:textColor="@color/text_dim"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
         </LinearLayout>
 
         <ProgressBar
             android:id="@+id/progress"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:layout_marginRight="12dp"
+            android:indeterminateTint="@color/accent2"
             android:visibility="gone" />
 
         <TextView
             android:id="@+id/status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginRight="20dp"
+            android:layout_marginRight="28dp"
+            android:maxWidth="380dp"
             android:textColor="@color/gold"
-            android:textSize="14sp" />
+            android:textSize="13sp" />
 
-        <TextClock
-            android:id="@+id/clock"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/text"
-            android:textSize="22sp" />
+            android:gravity="right"
+            android:orientation="vertical">
+
+            <TextClock
+                android:id="@+id/clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-light"
+                android:textColor="@color/text"
+                android:textSize="40sp" />
+
+            <TextClock
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="EEEE, d MMMM"
+                android:format24Hour="EEEE, d MMMM"
+                android:textColor="@color/text_dim"
+                android:textSize="13sp" />
+        </LinearLayout>
     </LinearLayout>
 
+    <!-- Main sections -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginLeft="-10dp"
+        android:layout_marginTop="22dp"
+        android:layout_marginRight="-10dp"
         android:layout_weight="3"
+        android:clipChildren="false"
         android:orientation="horizontal">
 
-        <Button android:id="@+id/tileLive" style="@style/Tile" android:text="LIVE TV" />
-        <Button android:id="@+id/tileGuide" style="@style/Tile" android:text="TV GUIDE" />
-        <Button android:id="@+id/tileMovies" style="@style/Tile" android:text="MOVIES" />
-        <Button android:id="@+id/tileSeries" style="@style/Tile" android:text="SERIES" />
+        <Button android:id="@+id/tileLive" style="@style/Tile" android:background="@drawable/bg_tile_live" android:drawableTop="@drawable/ic_live" android:text="Live TV" />
+        <Button android:id="@+id/tileGuide" style="@style/Tile" android:background="@drawable/bg_tile_guide" android:drawableTop="@drawable/ic_guide" android:text="TV Guide" />
+        <Button android:id="@+id/tileMovies" style="@style/Tile" android:background="@drawable/bg_tile_movies" android:drawableTop="@drawable/ic_movies" android:text="Movies" />
+        <Button android:id="@+id/tileSeries" style="@style/Tile" android:background="@drawable/bg_tile_series" android:drawableTop="@drawable/ic_series" android:text="Series" />
     </LinearLayout>
 
+    <!-- Quick actions -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_marginLeft="-8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginRight="-8dp"
+        android:layout_weight="0.95"
+        android:clipChildren="false"
         android:orientation="horizontal">
 
-        <Button android:id="@+id/tileResume" style="@style/SmallTile" android:text="Resume" android:visibility="gone" />
-        <Button android:id="@+id/tileCatchup" style="@style/SmallTile" android:text="Catch-up" />
-        <Button android:id="@+id/tileSettings" style="@style/SmallTile" android:text="Settings" />
-        <Button android:id="@+id/tileRefresh" style="@style/SmallTile" android:text="Refresh content" />
-        <Button android:id="@+id/tileProfiles" style="@style/SmallTile" android:text="Switch profile" />
+        <Button android:id="@+id/tileResume" style="@style/SmallTile" android:drawableLeft="@drawable/ic_play" android:text="Resume" android:visibility="gone" />
+        <Button android:id="@+id/tileCatchup" style="@style/SmallTile" android:drawableLeft="@drawable/ic_history" android:text="Catch-up" />
+        <Button android:id="@+id/tileSettings" style="@style/SmallTile" android:drawableLeft="@drawable/ic_settings" android:text="Settings" />
+        <Button android:id="@+id/tileRefresh" style="@style/SmallTile" android:drawableLeft="@drawable/ic_refresh" android:text="Refresh content" />
+        <Button android:id="@+id/tileProfiles" style="@style/SmallTile" android:drawableLeft="@drawable/ic_profiles" android:text="Switch profile" />
     </LinearLayout>
 </LinearLayout>

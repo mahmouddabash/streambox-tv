@@ -2,21 +2,23 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp"
-    android:background="@drawable/bg_item"
+    android:layout_margin="8dp"
+    android:background="@drawable/bg_row"
     android:clickable="true"
     android:focusable="true"
     android:orientation="vertical"
-    android:padding="6dp">
+    android:padding="5dp"
+    android:stateListAnimator="@animator/focus_lift">
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="190dp">
+        android:layout_height="200dp">
 
         <ImageView
             android:id="@+id/poster"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:background="@drawable/bg_round_clip"
             android:scaleType="centerCrop" />
 
         <TextView
@@ -24,21 +26,28 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|right"
-            android:background="@color/overlay"
-            android:paddingLeft="6dp"
-            android:paddingRight="6dp"
+            android:layout_margin="6dp"
+            android:background="@drawable/bg_badge"
+            android:fontFamily="sans-serif-medium"
+            android:paddingLeft="8dp"
+            android:paddingTop="2dp"
+            android:paddingRight="8dp"
+            android:paddingBottom="2dp"
             android:textColor="@color/gold"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
     </FrameLayout>
 
     <TextView
         android:id="@+id/title"
         android:layout_width="match_parent"
-        android:layout_height="38dp"
-        android:layout_marginTop="4dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="6dp"
         android:ellipsize="end"
+        android:fontFamily="sans-serif-medium"
         android:gravity="center_horizontal"
         android:maxLines="2"
+        android:paddingLeft="2dp"
+        android:paddingRight="2dp"
         android:textColor="@color/text"
         android:textSize="13sp" />
 </LinearLayout>

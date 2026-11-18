@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App background: midnight base with soft violet and cyan glows -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient android:angle="270" android:startColor="#0B1020" android:endColor="#05070D" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient android:type="radial" android:centerX="0.08" android:centerY="0.0"
+                android:gradientRadius="700dp" android:startColor="#3D7C5CFF" android:endColor="#007C5CFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient android:type="radial" android:centerX="1.0" android:centerY="1.0"
+                android:gradientRadius="650dp" android:startColor="#2600D4FF" android:endColor="#0000D4FF" />
+        </shape>
+    </item>
+</layer-list>

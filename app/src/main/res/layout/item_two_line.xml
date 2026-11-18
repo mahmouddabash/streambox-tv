@@ -6,6 +6,7 @@
     android:background="@drawable/bg_item"
     android:clickable="true"
     android:focusable="true"
+    android:stateListAnimator="@animator/focus_lift_small"
     android:orientation="vertical"
     android:paddingLeft="16dp"
     android:paddingTop="10dp"
@@ -19,7 +20,8 @@
         android:ellipsize="end"
         android:maxLines="1"
         android:textColor="@color/text"
-        android:textSize="17sp" />
+        android:textSize="17sp"
+        android:fontFamily="sans-serif-medium" />
 
     <TextView
         android:id="@+id/line2"

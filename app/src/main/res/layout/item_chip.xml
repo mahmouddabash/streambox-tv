@@ -7,6 +7,7 @@
     android:background="@drawable/bg_button"
     android:clickable="true"
     android:focusable="true"
+    android:stateListAnimator="@animator/focus_lift"
     android:gravity="center"
     android:paddingLeft="20dp"
     android:paddingRight="20dp"

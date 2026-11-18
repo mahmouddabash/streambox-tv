@@ -23,6 +23,10 @@ import java.util.Locale
 fun Context.toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
 fun ImageView.loadUrl(url: String?) {
+    if (background != null && !clipToOutline) {
+        outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+        clipToOutline = true
+    }
     if (url.isNullOrBlank()) {
         setImageResource(R.drawable.placeholder)
     } else {
@@ -35,6 +39,17 @@ fun ImageView.loadUrl(url: String?) {
 }
 
 object Ui {
+    /** Bold title with a smaller, dimmer second line (used on tiles). */
+    fun twoLine(title: String, sub: String, subScale: Float = 0.62f): CharSequence {
+        if (sub.isEmpty()) return title
+        val s = android.text.SpannableString("$title\n$sub")
+        val start = title.length + 1
+        s.setSpan(android.text.style.RelativeSizeSpan(subScale), start, s.length, 0)
+        s.setSpan(android.text.style.ForegroundColorSpan(0xCCFFFFFF.toInt()), start, s.length, 0)
+        s.setSpan(android.text.style.TypefaceSpan("sans-serif"), start, s.length, 0)
+        return s
+    }
+
     fun time(ms: Long): String =
         SimpleDateFormat(if (Prefs.use24h) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(ms))
 

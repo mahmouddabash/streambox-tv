@@ -20,6 +20,9 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/categories"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:padding="6dp"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </LinearLayout>
@@ -51,6 +54,9 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/grid"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:padding="6dp"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </LinearLayout>

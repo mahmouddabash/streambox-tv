@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0E1420</color>
-    <color name="panel">#172033</color>
-    <color name="panel_light">#22304A</color>
-    <color name="accent">#2F9BFF</color>
-    <color name="accent_dark">#1B6FC2</color>
-    <color name="text">#F2F5FA</color>
-    <color name="text_dim">#9AA7BD</color>
-    <color name="gold">#FFC83D</color>
-    <color name="danger">#E5484D</color>
-    <color name="overlay">#CC0A0F18</color>
+    <!-- Deep midnight base with a violet → cyan accent -->
+    <color name="bg">#070A12</color>
+    <color name="panel">#E6121828</color>
+    <color name="panel_light">#1C2438</color>
+    <color name="glass">#14FFFFFF</color>
+    <color name="glass_stroke">#1FFFFFFF</color>
+    <color name="accent">#7C5CFF</color>
+    <color name="accent_dark">#5A3FE0</color>
+    <color name="accent2">#00D4FF</color>
+    <color name="text">#F5F7FF</color>
+    <color name="text_dim">#8E9AB8</color>
+    <color name="gold">#FFC548</color>
+    <color name="danger">#FF4D6D</color>
+    <color name="overlay">#D9070A12</color>
+    <color name="scrim">#B3000000</color>
 </resources>

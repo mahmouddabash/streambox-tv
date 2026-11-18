@@ -22,6 +22,9 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/categories"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:padding="6dp"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </LinearLayout>
@@ -53,6 +56,9 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/channels"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:padding="6dp"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </LinearLayout>
@@ -68,7 +74,7 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1.15"
-            android:background="@android:color/black">
+            android:background="@drawable/bg_panel">
 
             <androidx.media3.ui.PlayerView
                 android:id="@+id/preview"
@@ -109,6 +115,9 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/epg"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:padding="6dp"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_marginTop="6dp"

@@ -113,7 +113,7 @@ class HomeActivity : AppCompatActivity() {
             tile.visibility = android.view.View.GONE
         } else {
             tile.visibility = android.view.View.VISIBLE
-            tile.text = "▶ Resume\n${ch.name}"
+            tile.text = Ui.twoLine("Resume", ch.name, 0.8f)
         }
     }
 
@@ -121,9 +121,10 @@ class HomeActivity : AppCompatActivity() {
         val n = NumberFormat.getIntegerInstance()
         status.text = ""
         tiles.forEach { it.isEnabled = true }
-        findViewById<Button>(R.id.tileLive).text = "LIVE TV\n${n.format(Repo.channels.size)} channels"
-        findViewById<Button>(R.id.tileMovies).text = "MOVIES\n${n.format(Repo.movies.size)} titles"
-        findViewById<Button>(R.id.tileSeries).text = "SERIES\n${n.format(Repo.series.size)} shows"
+        findViewById<Button>(R.id.tileLive).text = Ui.twoLine("Live TV", "${n.format(Repo.channels.size)} channels")
+        findViewById<Button>(R.id.tileGuide).text = Ui.twoLine("TV Guide", if (Repo.hasEpgSource) "What's on now" else "Not available")
+        findViewById<Button>(R.id.tileMovies).text = Ui.twoLine("Movies", "${n.format(Repo.movies.size)} titles")
+        findViewById<Button>(R.id.tileSeries).text = Ui.twoLine("Series", "${n.format(Repo.series.size)} shows")
         findViewById<Button>(R.id.tileRefresh).text = "Refresh content"
 
         val a = Repo.account
