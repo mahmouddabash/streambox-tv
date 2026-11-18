@@ -15,25 +15,39 @@ object Prefs {
 
     fun init(context: Context) {
         sp = context.applicationContext.getSharedPreferences("streambox", Context.MODE_PRIVATE)
-        seedDefaultProfile()
+        seedDefaultProfile(context)
     }
 
-    /** Adds the built-in playlist once on first launch; deleting it afterwards keeps it deleted. */
-    private fun seedDefaultProfile() {
-        if (sp.getBoolean("defaultSeeded", false)) return
-        if (profiles().none { it.id == "default" }) {
-            addProfile(
-                Profile(
-                    id = "default",
-                    name = "My IPTV",
-                    type = Profile.TYPE_XTREAM,
-                    server = "https://6699.info",
-                    username = "sa0165",
-                    password = "01069979654"
-                )
-            )
+    private val DEFAULT_PROFILE = Profile(
+        id = "default",
+        name = "My IPTV",
+        type = Profile.TYPE_XTREAM,
+        server = "http://mhav1.com:2095",
+        username = "sa0602",
+        password = "01069979654"
+    )
+
+    /**
+     * Adds the built-in playlist once per version; deleting it afterwards keeps it deleted.
+     * When the built-in login changes, an existing default profile is updated in place.
+     */
+    private fun seedDefaultProfile(context: Context) {
+        val version = 2
+        if (sp.getInt("defaultSeedVersion", if (sp.getBoolean("defaultSeeded", false)) 1 else 0) >= version) return
+        val list = profiles()
+        if (list.any { it.id == DEFAULT_PROFILE.id }) {
+            // Cached channels/movies belong to the old server.
+            java.io.File(context.cacheDir, "data_${DEFAULT_PROFILE.id}").deleteRecursively()
+            saveProfiles(list.map {
+                if (it.id == DEFAULT_PROFILE.id)
+                    it.copy(type = DEFAULT_PROFILE.type, server = DEFAULT_PROFILE.server,
+                        username = DEFAULT_PROFILE.username, password = DEFAULT_PROFILE.password)
+                else it
+            })
+        } else {
+            addProfile(DEFAULT_PROFILE)
         }
-        sp.edit().putBoolean("defaultSeeded", true).apply()
+        sp.edit().putBoolean("defaultSeeded", true).putInt("defaultSeedVersion", version).apply()
     }
 
     // ---------- Profiles ----------
