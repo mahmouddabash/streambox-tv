@@ -262,7 +262,8 @@ object Repo {
                                     categoryId = o["category_id"] ?: "",
                                     url = "",
                                     rating = o["rating"] ?: "",
-                                    ext = o["container_extension"] ?: "mp4"
+                                    ext = o["container_extension"] ?: "mp4",
+                                    added = (o["added"]?.toLongOrNull() ?: 0L) * 1000L
                                 )
                             )
                         }
@@ -288,7 +289,8 @@ object Repo {
                                     genre = o["genre"] ?: "",
                                     cast = o["cast"] ?: "",
                                     releaseDate = o["releaseDate"] ?: (o["release_date"] ?: ""),
-                                    rating = o["rating"] ?: ""
+                                    rating = o["rating"] ?: "",
+                                    added = (o["last_modified"]?.toLongOrNull() ?: 0L) * 1000L
                                 )
                             )
                         }
@@ -334,6 +336,7 @@ object Repo {
         m3uEpgUrl = epgUrl
         xmltv = null
         epgCache.clear()
+        movieInfoCache.clear()
         loaded = true
     }
 
@@ -401,6 +404,38 @@ object Repo {
             else -> series.filter { it.categoryId == catId }
         }
     }
+
+    // ------------------------------------------------------------------ Home rows
+
+    /** Newest first; falls back to the end of the provider's list when no dates are given. */
+    fun recentlyAddedMovies(limit: Int = 30): List<Movie> {
+        val all = moviesIn(CAT_ALL)
+        return if (all.any { it.added > 0 }) all.sortedByDescending { it.added }.take(limit)
+        else all.takeLast(limit).reversed()
+    }
+
+    fun recentlyAddedSeries(limit: Int = 30): List<Series> {
+        val all = seriesIn(CAT_ALL)
+        return if (all.any { it.added > 0 }) all.sortedByDescending { it.added }.take(limit)
+        else all.takeLast(limit).reversed()
+    }
+
+    /** Movies with a saved resume position, most recently watched first. */
+    fun continueWatchingMovies(limit: Int = 20): List<Movie> {
+        val locked = lockedIds(SECTION_VOD, vodCats)
+        return Prefs.resumeIds("vod_${profileId}_").mapNotNull { movieById[it] }
+            .filter { it.categoryId !in locked }.take(limit)
+    }
+
+    fun recentSeries(limit: Int = 20): List<Series> {
+        val locked = lockedIds(SECTION_SERIES, seriesCats)
+        return Prefs.recentList("recentSeries_$profileId").mapNotNull { seriesById[it] }
+            .filter { it.categoryId !in locked }.take(limit)
+    }
+
+    fun favouriteChannels(limit: Int = 30): List<Channel> = channelsIn(CAT_FAV).take(limit)
+
+    fun recentChannelList(limit: Int = 20): List<Channel> = channelsIn(CAT_RECENT).take(limit)
 
     // ------------------------------------------------------------------ EPG
 
@@ -500,7 +535,19 @@ object Repo {
 
     // ------------------------------------------------------------------ VOD / series details
 
-    suspend fun movieInfo(m: Movie): MovieInfo = withContext(Dispatchers.IO) {
+    private val movieInfoCache = java.util.concurrent.ConcurrentHashMap<String, MovieInfo>()
+
+    /** Cached result of [movieInfo], or null when it has not been fetched yet. */
+    fun cachedMovieInfo(m: Movie): MovieInfo? = movieInfoCache[m.id]
+
+    suspend fun movieInfo(m: Movie): MovieInfo {
+        movieInfoCache[m.id]?.let { return it }
+        val info = fetchMovieInfo(m)
+        if (info.plot.isNotEmpty() || info.backdrop.isNotEmpty()) movieInfoCache[m.id] = info
+        return info
+    }
+
+    private suspend fun fetchMovieInfo(m: Movie): MovieInfo = withContext(Dispatchers.IO) {
         val p = profile
         if (p == null || !p.isXtream) return@withContext MovieInfo()
         try {

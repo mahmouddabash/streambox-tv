@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/logo"
+            android:layout_width="132dp"
+            android:layout_height="132dp"
+            android:alpha="0"
+            android:src="@drawable/ic_app" />
+
+        <TextView
+            android:id="@+id/wordmark"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:alpha="0"
+            android:fontFamily="sans-serif-black"
+            android:letterSpacing="0.03"
+            android:text="StreamBox"
+            android:textColor="@color/text"
+            android:textSize="46sp" />
+
+        <TextView
+            android:id="@+id/tagline"
+            style="@style/Eyebrow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:alpha="0"
+            android:letterSpacing="0.5"
+            android:text="TV" />
+
+        <FrameLayout
+            android:id="@+id/bar"
+            android:layout_width="180dp"
+            android:layout_height="3dp"
+            android:layout_marginTop="34dp"
+            android:alpha="0"
+            android:background="@drawable/bg_chip_meta">
+
+            <View
+                android:id="@+id/barFill"
+                android:layout_width="60dp"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_live_bar" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

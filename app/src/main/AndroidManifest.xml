@@ -20,7 +20,7 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".ui.ProfilesActivity"
+            android:name=".ui.SplashActivity"
             android:exported="true"
             android:screenOrientation="landscape">
             <intent-filter>
@@ -29,6 +29,7 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".ui.ProfilesActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.AddProfileActivity" android:screenOrientation="landscape" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.HomeActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.LiveActivity" android:screenOrientation="landscape" android:windowSoftInputMode="stateAlwaysHidden|adjustPan" />
@@ -36,7 +37,6 @@
         <activity android:name=".ui.MovieDetailActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.SeriesDetailActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.EpgActivity" android:screenOrientation="landscape" />
-        <activity android:name=".ui.EpgGridActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.SettingsActivity" android:screenOrientation="landscape" />
         <activity
             android:name=".ui.PlayerActivity"

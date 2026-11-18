@@ -250,7 +250,7 @@ class PlayerActivity : AppCompatActivity() {
         val dur = p.duration
         when {
             dur != C.TIME_UNSET && dur > 0 && pos > dur * 0.95 -> Prefs.setPosition(item.key, 0L)
-            pos > 10_000L -> Prefs.setPosition(item.key, pos)
+            pos > 10_000L -> Prefs.setPosition(item.key, pos, if (dur != C.TIME_UNSET) dur else 0L)
         }
     }
 

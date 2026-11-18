@@ -47,7 +47,9 @@ data class Movie(
     val categoryId: String,
     val url: String,
     val rating: String,
-    val ext: String
+    val ext: String,
+    /** Unix time (ms) the provider added it; 0 when unknown. */
+    val added: Long = 0L
 )
 
 data class Series(
@@ -59,7 +61,9 @@ data class Series(
     val genre: String,
     val cast: String,
     val releaseDate: String,
-    val rating: String
+    val rating: String,
+    /** Unix time (ms) of the last update; 0 when unknown. */
+    val added: Long = 0L
 )
 
 data class Episode(

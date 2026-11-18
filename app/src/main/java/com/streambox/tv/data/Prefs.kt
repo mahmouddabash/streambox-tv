@@ -194,15 +194,51 @@ object Prefs {
 
     fun position(key: String): Long = if (key.isEmpty()) 0L else sp.getLong("pos_$key", 0L)
 
-    fun setPosition(key: String, ms: Long) {
+    fun setPosition(key: String, ms: Long, durationMs: Long = 0L) {
         if (key.isEmpty()) return
-        if (ms <= 0L) sp.edit().remove("pos_$key").apply()
-        else sp.edit().putLong("pos_$key", ms).apply()
+        if (ms <= 0L) sp.edit().remove("pos_$key").remove("posAt_$key").remove("dur_$key").apply()
+        else {
+            val e = sp.edit().putLong("pos_$key", ms).putLong("posAt_$key", System.currentTimeMillis())
+            if (durationMs > 0) e.putLong("dur_$key", durationMs)
+            e.apply()
+        }
+    }
+
+    /** Length of the video saved with its resume position, or 0 when unknown. */
+    fun duration(key: String): Long = if (key.isEmpty()) 0L else sp.getLong("dur_$key", 0L)
+
+    /** IDs of items (keys "prefix + id") with a resume position, most recently watched first. */
+    fun resumeIds(prefix: String): List<String> {
+        val all = sp.all
+        val full = "pos_$prefix"
+        return all.keys.filter { it.startsWith(full) }
+            .sortedByDescending { (all["posAt_" + it.removePrefix("pos_")] as? Long) ?: 0L }
+            .map { it.removePrefix(full) }
+    }
+
+    // ---------- Generic recent lists ----------
+
+    fun recentList(name: String): List<String> {
+        val out = ArrayList<String>()
+        try {
+            val arr = JSONArray(sp.getString(name, "[]"))
+            for (i in 0 until arr.length()) out.add(arr.getString(i))
+        } catch (_: Exception) {
+        }
+        return out
+    }
+
+    fun pushRecent(name: String, id: String, max: Int = 30) {
+        val list = ArrayList(recentList(name))
+        list.remove(id)
+        list.add(0, id)
+        while (list.size > max) list.removeAt(list.size - 1)
+        sp.edit().putString(name, JSONArray(list).toString()).apply()
     }
 
     fun clearResumePositions() {
         val e = sp.edit()
-        for (k in sp.all.keys) if (k.startsWith("pos_")) e.remove(k)
+        for (k in sp.all.keys) if (k.startsWith("pos_") || k.startsWith("posAt_") || k.startsWith("dur_")) e.remove(k)
         e.apply()
     }
 }

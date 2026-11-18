@@ -39,6 +39,16 @@ fun ImageView.loadUrl(url: String?) {
 }
 
 object Ui {
+    /** Loads a full-screen backdrop and fades it in (skips reloading the same URL). */
+    fun backdrop(view: ImageView, url: String?) {
+        if (url.isNullOrBlank() || view.tag == url) return
+        view.tag = url
+        view.load(url) {
+            crossfade(false)
+            listener(onSuccess = { _, _ -> view.animate().alpha(0.75f).setDuration(600).start() })
+        }
+    }
+
     /** Bold title with a smaller, dimmer second line (used on tiles). */
     fun twoLine(title: String, sub: String, subScale: Float = 0.62f): CharSequence {
         if (sub.isEmpty()) return title

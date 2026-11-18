@@ -1,62 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="horizontal"
-    android:padding="32dp">
+    android:layout_height="match_parent">
 
     <ImageView
-        android:id="@+id/poster"
-        android:background="@drawable/bg_round_clip"
-        android:layout_width="240dp"
-        android:layout_height="360dp"
+        android:id="@+id/backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
         android:scaleType="centerCrop" />
 
-    <LinearLayout
-        android:layout_width="0dp"
+    <View
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginLeft="28dp"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:background="@drawable/bg_hero_scrim_left" />
 
-        <TextView
-            android:id="@+id/title"
-            style="@style/Title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_hero_scrim_bottom"
+        android:alpha="0.7" />
 
-        <TextView
-            android:id="@+id/meta"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/gold"
-            android:textSize="14sp" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="64dp"
+        android:paddingRight="64dp">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:orientation="horizontal">
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:orientation="vertical">
 
-            <Button android:id="@+id/btnPlay" style="@style/Btn" android:text="▶  Play" />
-            <Button android:id="@+id/btnResume" style="@style/Btn" android:text="Resume" android:visibility="gone" />
-            <Button android:id="@+id/btnFav" style="@style/Btn" android:text="☆ Favourite" />
-        </LinearLayout>
+            <TextView
+                style="@style/Eyebrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Movie" />
 
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_marginTop="16dp"
-            android:layout_weight="1">
+            <TextView
+                android:id="@+id/title"
+                style="@style/HeroTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textSize="44sp" />
+
+            <TextView
+                android:id="@+id/meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
 
             <TextView
                 android:id="@+id/plot"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:ellipsize="end"
                 android:lineSpacingExtra="4dp"
-                android:textColor="@color/text"
-                android:textSize="15sp" />
-        </ScrollView>
+                android:maxLines="7"
+                android:textColor="#E6F5F7FF"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:clipChildren="false"
+                android:orientation="horizontal">
+
+                <Button android:id="@+id/btnPlay" style="@style/BtnPrimary" android:drawableLeft="@drawable/ic_play_btn" android:text="Play" />
+                <Button android:id="@+id/btnResume" style="@style/Btn" android:text="Resume" android:visibility="gone" />
+                <Button android:id="@+id/btnFav" style="@style/Btn" android:text="+ My list" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/poster"
+            android:layout_width="250dp"
+            android:layout_height="375dp"
+            android:layout_marginLeft="56dp"
+            android:background="@drawable/bg_round_clip"
+            android:elevation="16dp"
+            android:scaleType="centerCrop" />
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

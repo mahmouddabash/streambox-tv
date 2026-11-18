@@ -9,13 +9,14 @@ It contains no channels or content. You add the Xtream Codes login or M3U playli
 |---|---|
 | Profiles | **Add from your phone by scanning a QR code** (phone and TV on the same Wi-Fi), multiple profiles, Xtream Codes API login or M3U URL (+ optional XMLTV EPG URL), account status / expiry / connections |
 | Live TV | Categories, channel list with logos, search, favourites, recently watched, in-list preview, full-screen zapping (▲▼ / CH±), auto-reconnect |
-| TV guide | **Multi-channel guide grid** (channels down, programmes across), now/next overlay in the player, per-channel guide; Xtream short EPG or XMLTV (plain or .gz) for M3U |
+| Programme info | Now/next in the player and on the home screen, per-channel schedule (used for catch-up); Xtream short EPG or XMLTV (plain or .gz) for M3U |
 | Catch-up | Past programmes of archive channels play through the Xtream timeshift API |
 | Movies | Poster grid, search, favourites, details (plot, cast, rating), resume from where you stopped |
 | Series | Seasons and episodes, resume markers, auto-play next episode |
 | Player | HLS / MPEG-TS / DASH / MP4 / MKV, **auto-detects the real format** when a link sends something else (e.g. HLS behind a .ts/.mp4 link) and shows the server's message if it sends an error page, audio-track and subtitle selection, aspect ratio, playback speed, optional external player (VLC, MX…) |
 | Parental control | PIN; adult-named categories lock automatically, any category can be locked (hold OK on it) |
-| Look | Dark "glass" theme with violet → cyan accents, colour-coded home tiles with icons, rounded posters, zoom-on-focus for every tile and row, rounded dialogs |
+| Home | Streaming-service style: animated splash, full-screen hero that follows the focused title (backdrop, rating, year, plot), rows for Continue watching (with progress), recently watched channels, new movies, new series, your series, favourites |
+| Look | Dark glass theme with violet → cyan accents, cinematic movie/series pages with backdrops, zoom-on-focus everywhere, rounded dialogs |
 | Startup | Jumps into the last-used profile and pre-selects the last-watched channel; a **Resume** tile replays it in one click |
 | Settings | Stream format (.ts / .m3u8), open-last-profile toggle, time format, EPG time shift, refresh interval, player identity (User-Agent), clear cache |
 

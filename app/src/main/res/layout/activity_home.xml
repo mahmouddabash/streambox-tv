@@ -1,129 +1,183 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Cinematic home: full-bleed hero that follows focus, top navigation, content rows -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:clipChildren="false"
-    android:clipToPadding="false"
-    android:orientation="vertical"
-    android:paddingLeft="44dp"
-    android:paddingTop="30dp"
-    android:paddingRight="44dp"
-    android:paddingBottom="26dp">
+    android:clipChildren="false">
 
-    <!-- Header: brand, profile, status, clock -->
+    <!-- Two stacked images so the hero can cross-fade between titles -->
+    <ImageView
+        android:id="@+id/heroImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:scaleType="centerCrop" />
+
+    <ImageView
+        android:id="@+id/heroImage2"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:scaleType="centerCrop" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_hero_scrim_left" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_hero_scrim_bottom" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="140dp"
+        android:background="@drawable/bg_hero_scrim_top" />
+
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:orientation="vertical"
+        android:paddingTop="26dp">
 
-        <ImageView
-            android:layout_width="52dp"
-            android:layout_height="52dp"
-            android:layout_marginRight="16dp"
-            android:src="@drawable/ic_app" />
-
+        <!-- Top bar -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:clipChildren="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="48dp"
+            android:paddingRight="48dp">
+
+            <ImageView
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:src="@drawable/ic_app" />
 
             <TextView
-                style="@style/Eyebrow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="StreamBox TV" />
+                android:layout_marginLeft="10dp"
+                android:layout_marginRight="30dp"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.02"
+                android:text="StreamBox"
+                android:textColor="@color/text"
+                android:textSize="22sp" />
+
+            <Button android:id="@+id/tileLive" style="@style/NavPill" android:text="Live TV" />
+            <Button android:id="@+id/tileMovies" style="@style/NavPill" android:text="Movies" />
+            <Button android:id="@+id/tileSeries" style="@style/NavPill" android:text="Series" />
+            <Button android:id="@+id/tileCatchup" style="@style/NavPill" android:text="Catch-up" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ProgressBar
+                android:id="@+id/progress"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginRight="10dp"
+                android:indeterminateTint="@color/accent2"
+                android:visibility="gone" />
 
             <TextView
-                android:id="@+id/profileName"
-                style="@style/Title"
+                android:id="@+id/status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:maxLines="1" />
-
-            <TextView
-                android:id="@+id/accountInfo"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/text_dim"
+                android:maxWidth="320dp"
+                android:maxLines="2"
+                android:textColor="@color/gold"
                 android:textSize="13sp" />
-        </LinearLayout>
 
-        <ProgressBar
-            android:id="@+id/progress"
-            android:layout_width="26dp"
-            android:layout_height="26dp"
-            android:layout_marginRight="12dp"
-            android:indeterminateTint="@color/accent2"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginRight="28dp"
-            android:maxWidth="380dp"
-            android:textColor="@color/gold"
-            android:textSize="13sp" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="right"
-            android:orientation="vertical">
+            <Button android:id="@+id/tileRefresh" style="@style/IconBtn" android:drawableLeft="@drawable/ic_refresh_nav" />
+            <Button android:id="@+id/tileSettings" style="@style/IconBtn" android:drawableLeft="@drawable/ic_settings_nav" />
+            <Button android:id="@+id/tileProfiles" style="@style/IconBtn" android:drawableLeft="@drawable/ic_profiles_nav" />
 
             <TextClock
                 android:id="@+id/clock"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginLeft="22dp"
                 android:fontFamily="sans-serif-light"
                 android:textColor="@color/text"
-                android:textSize="40sp" />
+                android:textSize="26sp" />
+        </LinearLayout>
 
-            <TextClock
+        <!-- Hero text -->
+        <LinearLayout
+            android:id="@+id/hero"
+            android:layout_width="620dp"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="bottom"
+            android:orientation="vertical"
+            android:paddingLeft="56dp"
+            android:paddingBottom="10dp">
+
+            <TextView
+                android:id="@+id/heroEyebrow"
+                style="@style/Eyebrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/heroTitle"
+                style="@style/HeroTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:format12Hour="EEEE, d MMMM"
-                android:format24Hour="EEEE, d MMMM"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:maxLines="2" />
+
+            <TextView
+                android:id="@+id/heroMeta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/text"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/heroPlot"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:ellipsize="end"
+                android:lineSpacingExtra="3dp"
+                android:maxLines="3"
+                android:textColor="#D9F5F7FF"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/accountInfo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:textColor="@color/text_dim"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/profileName"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
         </LinearLayout>
+
+        <!-- Content rows -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rows"
+            android:layout_width="match_parent"
+            android:layout_height="330dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingBottom="24dp" />
     </LinearLayout>
-
-    <!-- Main sections -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginLeft="-10dp"
-        android:layout_marginTop="22dp"
-        android:layout_marginRight="-10dp"
-        android:layout_weight="3"
-        android:clipChildren="false"
-        android:orientation="horizontal">
-
-        <Button android:id="@+id/tileLive" style="@style/Tile" android:background="@drawable/bg_tile_live" android:drawableTop="@drawable/ic_live" android:text="Live TV" />
-        <Button android:id="@+id/tileGuide" style="@style/Tile" android:background="@drawable/bg_tile_guide" android:drawableTop="@drawable/ic_guide" android:text="TV Guide" />
-        <Button android:id="@+id/tileMovies" style="@style/Tile" android:background="@drawable/bg_tile_movies" android:drawableTop="@drawable/ic_movies" android:text="Movies" />
-        <Button android:id="@+id/tileSeries" style="@style/Tile" android:background="@drawable/bg_tile_series" android:drawableTop="@drawable/ic_series" android:text="Series" />
-    </LinearLayout>
-
-    <!-- Quick actions -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginLeft="-8dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginRight="-8dp"
-        android:layout_weight="0.95"
-        android:clipChildren="false"
-        android:orientation="horizontal">
-
-        <Button android:id="@+id/tileResume" style="@style/SmallTile" android:drawableLeft="@drawable/ic_play" android:text="Resume" android:visibility="gone" />
-        <Button android:id="@+id/tileCatchup" style="@style/SmallTile" android:drawableLeft="@drawable/ic_history" android:text="Catch-up" />
-        <Button android:id="@+id/tileSettings" style="@style/SmallTile" android:drawableLeft="@drawable/ic_settings" android:text="Settings" />
-        <Button android:id="@+id/tileRefresh" style="@style/SmallTile" android:drawableLeft="@drawable/ic_refresh" android:text="Refresh content" />
-        <Button android:id="@+id/tileProfiles" style="@style/SmallTile" android:drawableLeft="@drawable/ic_profiles" android:text="Switch profile" />
-    </LinearLayout>
-</LinearLayout>
+</FrameLayout>

@@ -31,6 +31,7 @@ class SeriesDetailActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val s = Repo.seriesItem(intent.getStringExtra(EXTRA_ID) ?: "")
+        if (s != null) Prefs.pushRecent("recentSeries_${Repo.profileId}", s.id)
         if (s == null) {
             finish()
             return
@@ -42,6 +43,7 @@ class SeriesDetailActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.title).text = s.name
         findViewById<ImageView>(R.id.poster).loadUrl(s.poster)
+        Ui.backdrop(findViewById(R.id.backdrop), s.poster)
         findViewById<TextView>(R.id.plot).text = s.plot
         val parts = ArrayList<String>()
         if (s.rating.isNotBlank() && s.rating != "0") parts.add("★ ${s.rating}")
@@ -113,7 +115,7 @@ class SeriesDetailActivity : AppCompatActivity() {
     }
 
     private fun updateFav() {
-        btnFav.text = if (Prefs.isFavourite(Repo.profileId, Prefs.FAV_SERIES, show.id)) "★ In favourites" else "☆ Favourite"
+        btnFav.text = if (Prefs.isFavourite(Repo.profileId, Prefs.FAV_SERIES, show.id)) "✓  In my list" else "+  My list"
     }
 
     companion object {

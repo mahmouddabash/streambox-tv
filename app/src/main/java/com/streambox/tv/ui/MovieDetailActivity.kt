@@ -37,6 +37,8 @@ class MovieDetailActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.title).text = m.name
         findViewById<ImageView>(R.id.poster).loadUrl(m.poster)
+        val backdrop = findViewById<ImageView>(R.id.backdrop)
+        Ui.backdrop(backdrop, Repo.cachedMovieInfo(m)?.backdrop?.ifBlank { null } ?: m.poster)
         meta.text = if (m.rating.isNotBlank() && m.rating != "0") "★ ${m.rating}" else ""
 
         val btnPlay = findViewById<Button>(R.id.btnPlay)
@@ -58,6 +60,7 @@ class MovieDetailActivity : AppCompatActivity() {
             if (info.duration.isNotBlank()) parts.add(info.duration)
             if (info.genre.isNotBlank()) parts.add(info.genre)
             meta.text = parts.joinToString("   •   ")
+            if (info.backdrop.isNotBlank()) Ui.backdrop(backdrop, info.backdrop)
             val sb = StringBuilder(info.plot)
             if (info.director.isNotBlank()) sb.append("\n\nDirector: ").append(info.director)
             if (info.cast.isNotBlank()) sb.append("\n\nCast: ").append(info.cast)
@@ -78,7 +81,7 @@ class MovieDetailActivity : AppCompatActivity() {
     }
 
     private fun updateFav() {
-        btnFav.text = if (Prefs.isFavourite(Repo.profileId, Prefs.FAV_VOD, movie.id)) "★ In favourites" else "☆ Favourite"
+        btnFav.text = if (Prefs.isFavourite(Repo.profileId, Prefs.FAV_VOD, movie.id)) "✓  In my list" else "+  My list"
     }
 
     private fun play(fromStart: Boolean) {
