@@ -17,7 +17,7 @@ It contains no channels or content. You add the Xtream Codes login or M3U playli
 | Parental control | PIN; adult-named categories lock automatically, any category can be locked (hold OK on it) |
 | Home | Streaming-service style: animated splash, full-screen hero that follows the focused title (backdrop, rating, year, plot), rows for Continue watching (with progress), recently watched channels, new movies, new series, your series, favourites |
 | Look | Dark glass theme with violet → cyan accents, cinematic movie/series pages with backdrops, zoom-on-focus everywhere, rounded dialogs |
-| Startup | Jumps into the last-used profile and pre-selects the last-watched channel; a **Resume** tile replays it in one click |
+| Startup | **Resumes where you left off**: reopens the last profile and the same screen (Live TV, Catch-up, Movies or Series), category and channel / title |
 | Settings | Stream format (.ts / .m3u8), open-last-profile toggle, time format, EPG time shift, refresh interval, player identity (User-Agent), clear cache |
 
 ## Build

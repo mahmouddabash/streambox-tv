@@ -11,6 +11,7 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import com.streambox.tv.R
+import com.streambox.tv.data.Prefs
 
 /** Short animated brand intro, then the profile picker (which opens the last profile on its own). */
 class SplashActivity : AppCompatActivity() {
@@ -52,7 +53,19 @@ class SplashActivity : AppCompatActivity() {
     private fun next() {
         if (done || isFinishing) return
         done = true
-        startActivity(Intent(this, ProfilesActivity::class.java))
+        val profiles = Intent(this, ProfilesActivity::class.java)
+        val last = Prefs.profiles().firstOrNull { it.id == Prefs.lastProfileId }
+        if (Prefs.openLastProfile && last != null) {
+            // Profile list underneath (so Back still reaches it), then straight into the last profile.
+            startActivities(arrayOf(
+                profiles,
+                Intent(this, HomeActivity::class.java)
+                    .putExtra(HomeActivity.EXTRA_PROFILE, last.id)
+                    .putExtra(HomeActivity.EXTRA_RESTORE, true)
+            ))
+        } else {
+            startActivity(profiles)
+        }
         @Suppress("DEPRECATION")
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         finish()

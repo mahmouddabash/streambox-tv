@@ -55,7 +55,7 @@ class SettingsActivity : AppCompatActivity() {
             Prefs.previewEnabled = !Prefs.previewEnabled
             refresh()
         })
-        rows.add(Row("Open last profile on startup", if (Prefs.openLastProfile) "On" else "Off: always show the profile list") {
+        rows.add(Row("Resume where I left off", if (Prefs.openLastProfile) "On: reopen the last profile, screen and channel" else "Off: always show the profile list") {
             Prefs.openLastProfile = !Prefs.openLastProfile
             refresh()
         })

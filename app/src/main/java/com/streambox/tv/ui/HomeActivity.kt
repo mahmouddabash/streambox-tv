@@ -133,7 +133,34 @@ class HomeActivity : AppCompatActivity() {
         rowsView.adapter = RowsAdapter()
 
         setHeroIdle("Welcome", p.name, "Loading your channels, movies and series…")
-        if (Repo.loaded && Repo.profileId == p.id) showLoaded() else load(false)
+        if (Repo.loaded && Repo.profileId == p.id) {
+            showLoaded()
+            restoreLastScreen()
+        } else load(false)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Prefs.lastScreen = Prefs.SCREEN_HOME
+    }
+
+    /** First load after launch: jump on to the screen the user left the app from. */
+    private fun restoreLastScreen() {
+        if (!intent.getBooleanExtra(EXTRA_RESTORE, false)) return
+        intent.removeExtra(EXTRA_RESTORE)
+        val target = when (Prefs.lastScreen) {
+            Prefs.SCREEN_LIVE -> Intent(this, LiveActivity::class.java)
+            Prefs.SCREEN_CATCHUP -> if (Repo.channels.any { it.hasArchive })
+                Intent(this, LiveActivity::class.java).putExtra(LiveActivity.EXTRA_ARCHIVE_ONLY, true) else null
+            Repo.SECTION_VOD -> if (Repo.movies.isNotEmpty())
+                Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_VOD) else null
+            Repo.SECTION_SERIES -> if (Repo.series.isNotEmpty())
+                Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_SERIES) else null
+            else -> null
+        } ?: return
+        startActivity(target.putExtra(EXTRA_RESTORE, true))
+        @Suppress("DEPRECATION")
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
     override fun onRestart() {
@@ -157,6 +184,7 @@ class HomeActivity : AppCompatActivity() {
                 if (Repo.profileId != profile.id) Repo.close()
                 Repo.load(this@HomeActivity, profile, force) { status.text = it }
                 showLoaded()
+                restoreLastScreen()
                 if (force) toast("Content refreshed")
             } catch (e: Exception) {
                 status.text = "Loading failed: ${e.message ?: "network error"}"
@@ -445,5 +473,6 @@ class HomeActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PROFILE = "profile"
+        const val EXTRA_RESTORE = "restore"
     }
 }

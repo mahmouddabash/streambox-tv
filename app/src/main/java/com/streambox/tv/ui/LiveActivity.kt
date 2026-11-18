@@ -119,10 +119,25 @@ class LiveActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) = applyFilter()
         })
 
-        catAdapter.submit(categories(), 0)
-        showCategory(Repo.CAT_ALL)
-        if (!archiveOnly) preselectLast()
-        catView.post { catView.requestFocus() }
+        // Reopen the category and channel the user was on last time.
+        val cats = categories()
+        val savedCat = Prefs.lastCategory(Repo.profileId, screenKey)
+        var catIdx = cats.indexOfFirst { it.id == savedCat && !Repo.isLocked(Repo.SECTION_LIVE, it) }
+        if (catIdx < 0) catIdx = 0
+        catAdapter.submit(cats, catIdx)
+        showCategory(cats[catIdx].id)
+        val focused = preselectLast()
+        catView.post {
+            if (catIdx > 0) (catView.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(catIdx, 120)
+            if (!focused) catView.requestFocus()
+        }
+    }
+
+    private val screenKey: String get() = if (archiveOnly) Prefs.SCREEN_CATCHUP else Prefs.SCREEN_LIVE
+
+    override fun onResume() {
+        super.onResume()
+        if (Repo.loaded) Prefs.lastScreen = screenKey
     }
 
     private fun categories(): List<Category> {
@@ -141,20 +156,27 @@ class LiveActivity : AppCompatActivity() {
 
     private fun showCategory(id: String) {
         currentCat = id
+        Prefs.setLastCategory(Repo.profileId, screenKey, id)
         favs = Prefs.favourites(Repo.profileId, Prefs.FAV_LIVE)
         catChannels = Repo.channelsIn(id, archiveOnly)
         applyFilter()
     }
 
-    /** Highlights and scrolls to the channel watched most recently, without starting a stream. */
-    private fun preselectLast() {
-        val lastId = Prefs.recentChannels(Repo.profileId).firstOrNull() ?: return
+    /**
+     * Highlights, scrolls to and focuses the channel watched most recently, without starting a stream.
+     * Returns false when that channel is not in the current list.
+     */
+    private fun preselectLast(): Boolean {
+        val lastId = Prefs.recentChannels(Repo.profileId).firstOrNull() ?: return false
         val idx = chAdapter.items.indexOfFirst { it.id == lastId }
-        if (idx < 0) return
+        if (idx < 0) return false
         chAdapter.select(idx)
+        val lm = channelsView.layoutManager as LinearLayoutManager
         channelsView.post {
-            (channelsView.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, 80)
+            lm.scrollToPositionWithOffset(idx, 120)
+            channelsView.post { lm.findViewByPosition(idx)?.requestFocus() }
         }
+        return true
     }
 
     private fun applyFilter() {

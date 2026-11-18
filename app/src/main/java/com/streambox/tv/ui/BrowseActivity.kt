@@ -94,9 +94,30 @@ class BrowseActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) = applyFilter()
         })
 
-        catAdapter.submit(categories(), 0)
-        showCategory(Repo.CAT_ALL)
-        catView.post { catView.requestFocus() }
+        // Reopen the category and title the user was on last time.
+        val cats = categories()
+        val savedCat = Prefs.lastCategory(Repo.profileId, section)
+        var catIdx = cats.indexOfFirst { it.id == savedCat && !Repo.isLocked(section, it) }
+        if (catIdx < 0) catIdx = 0
+        catAdapter.submit(cats, catIdx)
+        showCategory(cats[catIdx].id)
+        val lastItem = Prefs.lastItem(Repo.profileId, section)
+        val itemIdx = gridAdapter.items.indexOfFirst { it.id == lastItem }
+        catView.post {
+            if (catIdx > 0) (catView.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(catIdx, 120)
+            if (itemIdx < 0) {
+                catView.requestFocus()
+            } else {
+                val lm = grid.layoutManager as GridLayoutManager
+                lm.scrollToPositionWithOffset(itemIdx, 60)
+                grid.post { lm.findViewByPosition(itemIdx)?.requestFocus() ?: catView.requestFocus() }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (Repo.loaded) Prefs.lastScreen = section
     }
 
     private fun categories(): List<Category> {
@@ -109,6 +130,7 @@ class BrowseActivity : AppCompatActivity() {
 
     private fun showCategory(id: String) {
         currentCat = id
+        Prefs.setLastCategory(Repo.profileId, section, id)
         favs = Prefs.favourites(Repo.profileId, favType)
         cards = if (section == Repo.SECTION_VOD) {
             Repo.moviesIn(id).map { Card(it.id, it.name, it.poster, it.rating) }
@@ -126,6 +148,7 @@ class BrowseActivity : AppCompatActivity() {
     }
 
     private fun open(c: Card) {
+        Prefs.setLastItem(Repo.profileId, section, c.id)
         if (section == Repo.SECTION_VOD) {
             startActivity(Intent(this, MovieDetailActivity::class.java).putExtra(MovieDetailActivity.EXTRA_ID, c.id))
         } else {

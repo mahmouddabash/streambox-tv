@@ -133,6 +133,27 @@ object Prefs {
         get() = sp.getString("lastProfile", "") ?: ""
         set(v) = sp.edit().putString("lastProfile", v).apply()
 
+    /** Screen the user was on when they left the app: home, live, catchup, vod or series. */
+    var lastScreen: String
+        get() = sp.getString("lastScreen", SCREEN_HOME) ?: SCREEN_HOME
+        set(v) = sp.edit().putString("lastScreen", v).apply()
+
+    const val SCREEN_HOME = "home"
+    const val SCREEN_LIVE = "live"
+    const val SCREEN_CATCHUP = "catchup"
+
+    /** Last category per profile and screen. */
+    fun lastCategory(profileId: String, screen: String): String = sp.getString("lastCat_${screen}_$profileId", "") ?: ""
+
+    fun setLastCategory(profileId: String, screen: String, catId: String) =
+        sp.edit().putString("lastCat_${screen}_$profileId", catId).apply()
+
+    /** Last opened item per profile and screen (movie / series id). */
+    fun lastItem(profileId: String, screen: String): String = sp.getString("lastItem_${screen}_$profileId", "") ?: ""
+
+    fun setLastItem(profileId: String, screen: String, id: String) =
+        sp.edit().putString("lastItem_${screen}_$profileId", id).apply()
+
     var openLastProfile: Boolean
         get() = sp.getBoolean("openLastProfile", true)
         set(v) = sp.edit().putBoolean("openLastProfile", v).apply()
