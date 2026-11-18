@@ -1,0 +1,57 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (unsigned)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project StreamBox.xcodeproj -scheme StreamBox -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build.log 2>&1 || { grep -E "error:|warning: .*will be an error" build.log | sort -u | head -80; tail -40 build.log; exit 1; }
+          grep -c "warning:" build.log || true
+
+      - name: Package .ipa
+        working-directory: ios
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/StreamBox.app Payload/
+          zip -qry StreamBox.ipa Payload
+          ls -lh StreamBox.ipa
+
+      # Fixed tag so the download link never changes:
+      # https://github.com/mahmouddabash/streambox-tv/releases/download/ios/StreamBox.ipa
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios
+          name: StreamBox for iPhone & iPad
+          body: |
+            Newest iPhone/iPad build (#${{ github.run_number }}, commit ${{ github.sha }}).
+
+            Unsigned .ipa: install with Sideloadly or AltStore using your Apple ID.
+            Permanent link: https://github.com/mahmouddabash/streambox-tv/releases/download/ios/StreamBox.ipa
+          files: ios/StreamBox.ipa
+          make_latest: false
+          overwrite_files: true

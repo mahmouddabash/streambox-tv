@@ -68,3 +68,13 @@ Rename the app or package: change `app_name` in `res/values/strings.xml`, and `a
 - The guide is per channel (no multi-channel grid yet).
 - No recording, no multi-screen, no Chromecast, no cloud sync of profiles.
 - Before publishing on Google Play: add your own icon/banner artwork, a release signing key, and a privacy policy.
+
+## iPhone & iPad version
+
+A native SwiftUI version lives in [`ios/`](ios/) with the same look and features: profiles (Xtream / M3U), home with hero banner and Continue watching, Live TV with now-playing and catch-up, Movies, Series, parental PIN and resume-where-you-left-off. It uses Apple's player (AirPlay and Picture-in-Picture for movies); live channels are played as HLS (.m3u8). Titles in MKV/AVI that the provider can't serve as HLS show an **Open in VLC** button.
+
+Every push to `ios/` builds an unsigned app on GitHub's Mac runners:
+
+**https://github.com/mahmouddabash/streambox-tv/releases/download/ios/StreamBox.ipa**
+
+Install it with [Sideloadly](https://sideloadly.io) or AltStore using your Apple ID (free accounts must re-sign every 7 days).
