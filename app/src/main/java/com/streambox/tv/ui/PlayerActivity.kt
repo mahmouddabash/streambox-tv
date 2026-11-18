@@ -1,5 +1,7 @@
 package com.streambox.tv.ui
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -26,6 +29,7 @@ import com.streambox.tv.R
 import com.streambox.tv.data.PlayItem
 import com.streambox.tv.data.Prefs
 import com.streambox.tv.data.Repo
+import com.streambox.tv.data.StreamProbe
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -53,6 +57,16 @@ class PlayerActivity : AppCompatActivity() {
     private var retries = 0
     private var resizeIdx = 0
     private var epgJob: Job? = null
+
+    // Format recovery: when the player cannot parse what the server sends, probe the URL and retry.
+    private var token = 0
+    private var attemptUrl = ""
+    private var startPos = 0L
+    private var recoverySteps = 0
+    private var triedAltExt = false
+    private var firstProbe: StreamProbe.Result? = null
+    private var probeJob: Job? = null
+    private var failed = false
 
     private val handler = Handler(Looper.getMainLooper())
     private val hideOverlay = Runnable { overlay.visibility = View.GONE }
@@ -119,18 +133,112 @@ class PlayerActivity : AppCompatActivity() {
         val item = current
         Repo.queueIndex = index
         retries = 0
+        token++
+        recoverySteps = 0
+        triedAltExt = false
+        firstProbe = null
+        failed = false
+        probeJob?.cancel()
         errorView.visibility = View.GONE
         handler.removeCallbacks(retry)
 
         playerView.useController = !item.isLive
-        p.setMediaItem(PlayerFactory.mediaItem(item.url))
-        val pos = if (resume && !item.isLive) Prefs.position(item.key) else 0L
-        if (pos > 0) p.seekTo(pos)
-        p.prepare()
-        p.playWhenReady = true
+        startPos = if (resume && !item.isLive) Prefs.position(item.key) else 0L
+        load(item.url, null)
 
         if (item.isLive && item.channelId.isNotEmpty()) Prefs.addRecentChannel(Repo.profileId, item.channelId)
         showOverlay()
+    }
+
+    private fun load(url: String, mimeType: String?) {
+        val p = player ?: return
+        attemptUrl = url
+        p.setMediaItem(PlayerFactory.mediaItem(url, mimeType))
+        if (startPos > 0) p.seekTo(startPos)
+        p.prepare()
+        p.playWhenReady = true
+    }
+
+    private fun isParsingError(e: PlaybackException) = e.errorCode in
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED..PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED
+
+    /** Xtream links can usually be requested as .ts or .m3u8; gives the other one, or null. */
+    private fun altExtensionUrl(url: String): String? {
+        if (!Regex("/(live|movie|series|timeshift)/").containsMatchIn(url)) return null
+        val q = url.indexOf('?').let { if (it < 0) url.length else it }
+        val path = url.substring(0, q)
+        val dot = path.lastIndexOf('.')
+        if (dot <= path.lastIndexOf('/')) return null
+        val ext = path.substring(dot + 1).lowercase()
+        val alt = if (ext == "m3u8") "ts" else "m3u8"
+        return path.substring(0, dot + 1) + alt + url.substring(q)
+    }
+
+    /** Finds out what the server really sends and retries in that format, or explains why it can't play. */
+    private fun recover(error: PlaybackException) {
+        recoverySteps++
+        val myToken = token
+        val url = attemptUrl
+        errorView.text = "Checking the stream format…"
+        errorView.visibility = View.VISIBLE
+        probeJob?.cancel()
+        probeJob = lifecycleScope.launch {
+            val r = try { StreamProbe.probe(url) } catch (_: Exception) { null }
+            if (myToken != token || player == null) return@launch
+            if (firstProbe == null) firstProbe = r
+            val mime = when (r?.kind) {
+                StreamProbe.Kind.HLS -> MimeTypes.APPLICATION_M3U8
+                StreamProbe.Kind.DASH -> MimeTypes.APPLICATION_MPD
+                else -> null
+            }
+            val alt = if (!triedAltExt) altExtensionUrl(url) else null
+            when {
+                r != null && mime != null -> {
+                    errorView.visibility = View.GONE
+                    load(r.finalUrl, mime)
+                }
+                r != null && (r.httpCode >= 400 || r.kind == StreamProbe.Kind.TEXT || r.kind == StreamProbe.Kind.EMPTY) ->
+                    fail(error)
+                alt != null -> {
+                    triedAltExt = true
+                    errorView.visibility = View.GONE
+                    load(alt, null)
+                }
+                else -> fail(error)
+            }
+        }
+    }
+
+    private fun fail(error: PlaybackException) {
+        failed = true
+        val item = current
+        val r = firstProbe
+        val reason = when {
+            r == null -> error.errorCodeName
+            r.httpCode >= 400 -> "The server answered HTTP ${r.httpCode}" +
+                if (r.message.isNotEmpty()) ":\n\"${r.message}\"" else "."
+            r.kind == StreamProbe.Kind.TEXT -> "The server sent a message instead of video" +
+                if (r.message.isNotEmpty()) ":\n\"${r.message}\"" else "."
+            r.kind == StreamProbe.Kind.EMPTY -> "The server sent an empty response (stream offline or connection limit reached)."
+            r.kind == StreamProbe.Kind.ASF || r.kind == StreamProbe.Kind.RM ->
+                "This video is ${r.kind.label}, which the built-in player does not support."
+            else -> "Format: ${r.kind.label}. The built-in player could not read it (${error.errorCodeName})."
+        }
+        errorView.text = "Cannot play this stream.\n$reason\n\nOK = open in VLC / MX Player     " +
+            if (item.isLive) "▲▼ = other channel     Back = return" else "Back = return"
+        errorView.visibility = View.VISIBLE
+        playerView.hideController()
+    }
+
+    private fun openExternal() {
+        try {
+            val i = Intent(Intent.ACTION_VIEW)
+            i.setDataAndType(Uri.parse(current.url), "video/*")
+            i.putExtra("title", current.title)
+            startActivity(i)
+        } catch (_: Exception) {
+            toast("No external player installed. Install VLC or MX Player from the Play Store.")
+        }
     }
 
     private fun savePosition() {
@@ -156,6 +264,7 @@ class PlayerActivity : AppCompatActivity() {
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_READY) {
                 retries = 0
+                failed = false
                 errorView.visibility = View.GONE
             } else if (state == Player.STATE_ENDED) {
                 val item = current
@@ -176,15 +285,18 @@ class PlayerActivity : AppCompatActivity() {
 
         override fun onPlayerError(error: PlaybackException) {
             val item = current
-            if (item.isLive && retries < 5) {
+            if (isParsingError(error) && recoverySteps < 3) {
+                startPos = if (item.isLive) 0L else maxOf(startPos, player?.currentPosition ?: 0L)
+                recover(error)
+            } else if (isParsingError(error)) {
+                fail(error)
+            } else if (item.isLive && retries < 5) {
                 retries++
                 errorView.text = "Connection lost. Reconnecting… ($retries/5)"
                 errorView.visibility = View.VISIBLE
                 handler.postDelayed(retry, 2500)
             } else {
-                errorView.text = "Cannot play this stream.\n${error.errorCodeName}\n\n" +
-                    if (item.isLive) "Press ▲▼ for another channel, or Back." else "Press Back to return."
-                errorView.visibility = View.VISIBLE
+                fail(error)
             }
         }
     }
@@ -235,6 +347,13 @@ class PlayerActivity : AppCompatActivity() {
         if (items.isEmpty() || player == null) return super.dispatchKeyEvent(event)
         val live = current.isLive
         val down = event.action == KeyEvent.ACTION_DOWN
+
+        if (failed) when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (down && event.repeatCount == 0) openExternal()
+                return true
+            }
+        }
 
         when (event.keyCode) {
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {

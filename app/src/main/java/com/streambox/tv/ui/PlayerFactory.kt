@@ -24,10 +24,12 @@ object PlayerFactory {
             .build()
     }
 
-    fun mediaItem(url: String): MediaItem {
+    /** [mimeType] forces the format (used when probing found the server sends something else). */
+    fun mediaItem(url: String, mimeType: String? = null): MediaItem {
         val path = url.substringBefore('?').lowercase()
         val b = MediaItem.Builder().setUri(url)
         when {
+            mimeType != null -> b.setMimeType(mimeType)
             path.endsWith(".m3u8") -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
             path.endsWith(".mpd") -> b.setMimeType(MimeTypes.APPLICATION_MPD)
         }
