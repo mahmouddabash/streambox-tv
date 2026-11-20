@@ -121,25 +121,51 @@ object Updater {
         }
     }
 
+    /**
+     * Opens Android's installer right away. Some TVs (TCL and others) report that installing isn't
+     * allowed even when it is, so we don't ask first: the system shows its own prompt if needed.
+     */
     private fun install(activity: Activity, file: File) {
-        if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
-            toast(activity, "Allow StreamBox to install apps, then choose Install now again")
+        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
+        @Suppress("DEPRECATION")
+        val attempts = listOf(
+            Intent(Intent.ACTION_INSTALL_PACKAGE).setData(uri)
+                .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                .putExtra(Intent.EXTRA_RETURN_RESULT, false),
+            Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+        )
+        for (i in attempts) {
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             try {
-                activity.startActivity(
-                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))
-                )
+                activity.startActivity(i)
+                return
             } catch (_: Exception) {
             }
-            return
         }
-        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
-        val i = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, "application/vnd.android.package-archive")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        try {
-            activity.startActivity(i)
-        } catch (e: Exception) {
-            toast(activity, "Couldn't open the installer: ${e.message}")
-        }
+        manualInstall(activity)
     }
+
+    /** Last resort: tell the user how to install with the Downloader app (or allow StreamBox in settings). */
+    private fun manualInstall(activity: Activity) {
+        AlertDialog.Builder(activity)
+            .setTitle("Install the update")
+            .setMessage(
+                "This TV didn't open its installer. You can:\n\n" +
+                    "• Open the Downloader app and enter:\n  $LINK\n\n" +
+                    "• Or allow StreamBox under Settings → Apps → Install unknown apps, then try again."
+            )
+            .setPositiveButton("Open settings") { _, _ ->
+                try {
+                    val i = if (Build.VERSION.SDK_INT >= 26)
+                        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))
+                    else Intent(Settings.ACTION_SECURITY_SETTINGS)
+                    activity.startActivity(i)
+                } catch (_: Exception) {
+                }
+            }
+            .setNegativeButton("OK", null)
+            .show()
+    }
+
+    const val LINK = "https://github.com/mahmouddabash/streambox-tv/releases/latest/download/StreamBoxTV.apk"
 }

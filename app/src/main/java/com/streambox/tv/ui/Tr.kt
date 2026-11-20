@@ -50,6 +50,8 @@ object Tr {
         "Built-in player" to "المشغّل المدمج",
         "Cache cleared" to "تم مسح الذاكرة المؤقتة",
         "Cancel" to "إلغاء",
+        "Install the update" to "تثبيت التحديث",
+        "Open settings" to "فتح الإعدادات",
         "Profile password" to "كلمة مرور الملف",
         "Wrong password" to "كلمة المرور خاطئة",
         "Built-in profile  •  🔒 login hidden" to "ملف مدمج  •  🔒 بيانات الدخول مخفية",
