@@ -4,8 +4,8 @@
     android:layout_height="match_parent"
     android:gravity="center_horizontal"
     android:orientation="horizontal"
-    android:paddingLeft="32dp"
-    android:paddingRight="32dp">
+    android:paddingStart="32dp"
+    android:paddingEnd="32dp">
 
 <ScrollView
     android:layout_width="0dp"
@@ -128,7 +128,7 @@
         android:id="@+id/qrPanel"
         android:layout_width="300dp"
         android:layout_height="match_parent"
-        android:layout_marginLeft="32dp"
+        android:layout_marginStart="32dp"
         android:gravity="center"
         android:orientation="vertical">
 

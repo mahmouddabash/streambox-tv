@@ -214,6 +214,16 @@ object Prefs {
         get() = sp.getInt("subBg", 0)
         set(v) = sp.edit().putInt("subBg", v).apply()
 
+    /** "en" or "ar" */
+    var language: String
+        get() = sp.getString("language", "en") ?: "en"
+        set(v) = sp.edit().putString("language", v).apply()
+
+    /** Accent colour theme id (see Tr.accents). */
+    var accent: String
+        get() = sp.getString("accent", "violet") ?: "violet"
+        set(v) = sp.edit().putString("accent", v).apply()
+
     var lastUpdateCheck: Long
         get() = sp.getLong("lastUpdateCheck", 0L)
         set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()

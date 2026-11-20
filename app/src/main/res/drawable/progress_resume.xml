@@ -6,7 +6,7 @@
     <item android:id="@android:id/progress">
         <clip>
             <shape>
-                <gradient android:angle="0" android:startColor="@color/accent" android:endColor="@color/accent2" />
+                <gradient android:angle="0" android:startColor="?attr/sbAccent" android:endColor="?attr/sbAccent2" />
                 <corners android:radius="2dp" />
             </shape>
         </clip>

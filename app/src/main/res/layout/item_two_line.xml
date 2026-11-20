@@ -8,9 +8,9 @@
     android:focusable="true"
     android:stateListAnimator="@animator/focus_lift_small"
     android:orientation="vertical"
-    android:paddingLeft="16dp"
+    android:paddingStart="16dp"
     android:paddingTop="10dp"
-    android:paddingRight="16dp"
+    android:paddingEnd="16dp"
     android:paddingBottom="10dp">
 
     <TextView

@@ -13,7 +13,8 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/bg_hero_scrim_left" />
+        android:background="@drawable/bg_hero_scrim_left"
+        android:tag="mirror" />
 
     <View
         android:layout_width="match_parent"
@@ -44,7 +45,7 @@
             style="@style/Btn"
             android:layout_width="match_parent"
             android:layout_marginTop="12dp"
-            android:layout_marginRight="0dp"
+            android:layout_marginEnd="0dp"
             android:text="☆ Favourite" />
 
         <Button
@@ -52,7 +53,7 @@
             style="@style/Btn"
             android:layout_width="match_parent"
             android:layout_marginTop="10dp"
-            android:layout_marginRight="0dp"
+            android:layout_marginEnd="0dp"
             android:text="▶  Trailer"
             android:visibility="gone" />
     </LinearLayout>
@@ -60,7 +61,7 @@
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_marginLeft="24dp"
+        android:layout_marginStart="24dp"
         android:layout_weight="1"
         android:orientation="vertical">
 

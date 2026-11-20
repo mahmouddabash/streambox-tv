@@ -65,9 +65,9 @@
         android:layout_gravity="bottom"
         android:background="@drawable/bg_scrim_bottom"
         android:orientation="vertical"
-        android:paddingLeft="36dp"
+        android:paddingStart="36dp"
         android:paddingTop="56dp"
-        android:paddingRight="36dp"
+        android:paddingEnd="36dp"
         android:paddingBottom="20dp"
         android:visibility="gone">
 

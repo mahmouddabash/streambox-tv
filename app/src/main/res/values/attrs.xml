@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Accent colours, switchable in Settings → Theme colour -->
+    <attr name="sbAccent" format="color" />
+    <attr name="sbAccent2" format="color" />
+    <attr name="sbAccentDark" format="color" />
+</resources>

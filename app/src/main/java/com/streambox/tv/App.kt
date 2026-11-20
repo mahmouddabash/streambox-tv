@@ -8,5 +8,6 @@ class App : Application() {
         super.onCreate()
         Prefs.init(this)
         com.streambox.tv.data.Reminders.init(this)
+        com.streambox.tv.ui.Tr.init(this)
     }
 }

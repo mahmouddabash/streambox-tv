@@ -10,7 +10,7 @@
         android:id="@+id/line1"
         android:layout_width="96dp"
         android:layout_height="wrap_content"
-        android:textColor="@color/accent"
+        android:textColor="?attr/sbAccent"
         android:textSize="13sp" />
 
     <TextView

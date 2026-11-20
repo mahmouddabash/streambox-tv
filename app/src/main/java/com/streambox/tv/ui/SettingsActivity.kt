@@ -48,6 +48,19 @@ class SettingsActivity : AppCompatActivity() {
                 Prefs.streamFormat = if (it == 0) "ts" else "m3u8"
             }
         })
+        rows.add(Row("Language", if (Prefs.language == "ar") "العربية" else "English") {
+            choose("Language", arrayOf("English", "العربية"), if (Prefs.language == "ar") 1 else 0) {
+                Tr.setLanguage(if (it == 1) "ar" else "en")
+            }
+        })
+        rows.add(Row("Theme colour", Tr.accentNames[Tr.accents.indexOf(Prefs.accent).coerceAtLeast(0)]) {
+            choose("Theme colour", Tr.accentNames.toTypedArray(), Tr.accents.indexOf(Prefs.accent).coerceAtLeast(0)) {
+                Prefs.accent = Tr.accents[it]
+                // Reopen the app so every screen picks up the new colours (resume-where-left-off brings you back).
+                startActivity(android.content.Intent(this, SplashActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            }
+        })
         rows.add(Row("Check for updates", "Installed: build ${com.streambox.tv.data.Updater.currentBuild}. Checked automatically once a day") {
             com.streambox.tv.data.Updater.check(this, lifecycleScope, quiet = false)
         })

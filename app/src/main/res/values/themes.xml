@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
-        <item name="colorPrimary">@color/accent</item>
+        <item name="sbAccent">@color/accent</item>
+        <item name="sbAccent2">@color/accent2</item>
+        <item name="sbAccentDark">@color/accent_dark</item>
+        <item name="viewInflaterClass">com.streambox.tv.ui.TrViewInflater</item>
+        <item name="colorPrimary">?attr/sbAccent</item>
         <item name="colorPrimaryDark">@color/bg</item>
-        <item name="colorAccent">@color/accent2</item>
-        <item name="colorControlActivated">@color/accent2</item>
+        <item name="colorAccent">?attr/sbAccent2</item>
+        <item name="colorControlActivated">?attr/sbAccent2</item>
         <item name="android:windowBackground">@drawable/bg_app</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:textColorPrimary">@color/text</item>
@@ -22,8 +26,8 @@
     <!-- Rounded, glassy dialogs with a focus highlight that matches the rest of the app -->
     <style name="DialogTheme" parent="ThemeOverlay.AppCompat.Dialog.Alert">
         <item name="android:windowBackground">@drawable/bg_dialog</item>
-        <item name="colorAccent">@color/accent2</item>
-        <item name="colorControlActivated">@color/accent2</item>
+        <item name="colorAccent">?attr/sbAccent2</item>
+        <item name="colorControlActivated">?attr/sbAccent2</item>
         <item name="android:textColorPrimary">@color/text</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:textColorSecondary">@color/text_dim</item>
@@ -32,13 +36,13 @@
     </style>
 
     <style name="DialogButton" parent="Widget.AppCompat.Button.ButtonBar.AlertDialog">
-        <item name="android:textColor">@color/accent2</item>
+        <item name="android:textColor">?attr/sbAccent2</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">16sp</item>
         <item name="android:background">@drawable/bg_button</item>
-        <item name="android:layout_marginLeft">8dp</item>
-        <item name="android:paddingLeft">20dp</item>
-        <item name="android:paddingRight">20dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
     </style>
 
     <style name="Title">
@@ -49,7 +53,7 @@
     </style>
 
     <style name="Eyebrow">
-        <item name="android:textColor">@color/accent2</item>
+        <item name="android:textColor">?attr/sbAccent2</item>
         <item name="android:textSize">12sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:letterSpacing">0.18</item>
@@ -68,7 +72,7 @@
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:letterSpacing">0.04</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:gravity">left|bottom</item>
+        <item name="android:gravity">start|bottom</item>
         <item name="android:padding">22dp</item>
         <item name="android:drawablePadding">14dp</item>
         <item name="android:focusable">true</item>
@@ -79,7 +83,7 @@
         <item name="android:layout_margin">8dp</item>
         <item name="android:textSize">15sp</item>
         <item name="android:letterSpacing">0.01</item>
-        <item name="android:gravity">left|center_vertical</item>
+        <item name="android:gravity">start|center_vertical</item>
         <item name="android:padding">16dp</item>
         <item name="android:drawablePadding">12dp</item>
         <item name="android:maxLines">2</item>
@@ -90,9 +94,9 @@
     <style name="Btn">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">48dp</item>
-        <item name="android:paddingLeft">26dp</item>
-        <item name="android:paddingRight">26dp</item>
-        <item name="android:layout_marginRight">12dp</item>
+        <item name="android:paddingStart">26dp</item>
+        <item name="android:paddingEnd">26dp</item>
+        <item name="android:layout_marginEnd">12dp</item>
         <item name="android:background">@drawable/bg_button</item>
         <item name="android:stateListAnimator">@animator/focus_lift</item>
         <item name="android:textColor">@color/text</item>
@@ -108,8 +112,8 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">50dp</item>
         <item name="android:layout_marginBottom">10dp</item>
-        <item name="android:paddingLeft">20dp</item>
-        <item name="android:paddingRight">20dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
         <item name="android:background">@drawable/bg_input</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:textColorHint">@color/text_dim</item>
@@ -121,9 +125,9 @@
     <style name="NavPill">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">44dp</item>
-        <item name="android:layout_marginRight">6dp</item>
-        <item name="android:paddingLeft">20dp</item>
-        <item name="android:paddingRight">20dp</item>
+        <item name="android:layout_marginEnd">6dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:minHeight">0dp</item>
         <item name="android:background">@drawable/bg_nav</item>
@@ -140,11 +144,11 @@
     <style name="IconBtn">
         <item name="android:layout_width">44dp</item>
         <item name="android:layout_height">44dp</item>
-        <item name="android:layout_marginLeft">10dp</item>
+        <item name="android:layout_marginStart">10dp</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:minHeight">0dp</item>
         <item name="android:padding">0dp</item>
-        <item name="android:paddingLeft">11dp</item>
+        <item name="android:paddingStart">11dp</item>
         <item name="android:background">@drawable/bg_icon_btn</item>
         <item name="android:stateListAnimator">@animator/focus_lift</item>
         <item name="android:gravity">center</item>
@@ -171,11 +175,42 @@
     </style>
     <style name="BtnPrimary" parent="Btn">
         <item name="android:layout_height">52dp</item>
-        <item name="android:paddingLeft">28dp</item>
-        <item name="android:paddingRight">32dp</item>
+        <item name="android:paddingStart">28dp</item>
+        <item name="android:paddingEnd">32dp</item>
         <item name="android:drawablePadding">8dp</item>
         <item name="android:background">@drawable/bg_btn_primary</item>
         <item name="android:textColor">@color/btn_primary_text</item>
         <item name="android:textSize">17sp</item>
+    </style>
+    <!-- Accent colour overlays applied at runtime (Settings → Theme colour) -->
+    <style name="Accent.Violet">
+        <item name="sbAccent">#7C5CFF</item>
+        <item name="sbAccent2">#00D4FF</item>
+        <item name="sbAccentDark">#5A3FE0</item>
+    </style>
+    <style name="Accent.Ocean">
+        <item name="sbAccent">#2F80FF</item>
+        <item name="sbAccent2">#00E0C6</item>
+        <item name="sbAccentDark">#1F5FD0</item>
+    </style>
+    <style name="Accent.Sunset">
+        <item name="sbAccent">#FF3D6E</item>
+        <item name="sbAccent2">#FF9A3D</item>
+        <item name="sbAccentDark">#D92A57</item>
+    </style>
+    <style name="Accent.Emerald">
+        <item name="sbAccent">#10B981</item>
+        <item name="sbAccent2">#A3E635</item>
+        <item name="sbAccentDark">#0B8F64</item>
+    </style>
+    <style name="Accent.Gold">
+        <item name="sbAccent">#F59E0B</item>
+        <item name="sbAccent2">#FDE047</item>
+        <item name="sbAccentDark">#C77C05</item>
+    </style>
+    <style name="Accent.Rose">
+        <item name="sbAccent">#EC4899</item>
+        <item name="sbAccent2">#A855F7</item>
+        <item name="sbAccentDark">#C02E78</item>
     </style>
 </resources>

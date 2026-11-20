@@ -20,7 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-fun Context.toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+fun Context.toast(msg: String) = Toast.makeText(this, Tr.s(msg), Toast.LENGTH_SHORT).show()
 
 fun ImageView.loadUrl(url: String?) {
     if (background != null && !clipToOutline) {

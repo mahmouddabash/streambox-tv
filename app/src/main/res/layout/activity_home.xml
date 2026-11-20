@@ -23,7 +23,8 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/bg_hero_scrim_left" />
+        android:background="@drawable/bg_hero_scrim_left"
+        android:tag="mirror" />
 
     <View
         android:layout_width="match_parent"
@@ -50,8 +51,8 @@
             android:clipChildren="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingLeft="48dp"
-            android:paddingRight="48dp">
+            android:paddingStart="48dp"
+            android:paddingEnd="48dp">
 
             <ImageView
                 android:layout_width="38dp"
@@ -61,8 +62,8 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="10dp"
-                android:layout_marginRight="30dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="30dp"
                 android:fontFamily="sans-serif-black"
                 android:letterSpacing="0.02"
                 android:text="StreamBox"
@@ -83,8 +84,8 @@
                 android:id="@+id/progress"
                 android:layout_width="22dp"
                 android:layout_height="22dp"
-                android:layout_marginRight="10dp"
-                android:indeterminateTint="@color/accent2"
+                android:layout_marginEnd="10dp"
+                android:indeterminateTint="?attr/sbAccent2"
                 android:visibility="gone" />
 
             <TextView
@@ -96,18 +97,18 @@
                 android:textColor="@color/gold"
                 android:textSize="13sp" />
 
-            <Button android:id="@+id/tileSearch" style="@style/IconBtn" android:drawableLeft="@drawable/ic_search_nav" />
-            <Button android:id="@+id/tileMulti" style="@style/IconBtn" android:drawableLeft="@drawable/ic_grid_nav" />
-            <Button android:id="@+id/tileRec" style="@style/IconBtn" android:drawableLeft="@drawable/ic_rec_nav" />
-            <Button android:id="@+id/tileRefresh" style="@style/IconBtn" android:drawableLeft="@drawable/ic_refresh_nav" />
-            <Button android:id="@+id/tileSettings" style="@style/IconBtn" android:drawableLeft="@drawable/ic_settings_nav" />
-            <Button android:id="@+id/tileProfiles" style="@style/IconBtn" android:drawableLeft="@drawable/ic_profiles_nav" />
+            <Button android:id="@+id/tileSearch" style="@style/IconBtn" android:drawableStart="@drawable/ic_search_nav" />
+            <Button android:id="@+id/tileMulti" style="@style/IconBtn" android:drawableStart="@drawable/ic_grid_nav" />
+            <Button android:id="@+id/tileRec" style="@style/IconBtn" android:drawableStart="@drawable/ic_rec_nav" />
+            <Button android:id="@+id/tileRefresh" style="@style/IconBtn" android:drawableStart="@drawable/ic_refresh_nav" />
+            <Button android:id="@+id/tileSettings" style="@style/IconBtn" android:drawableStart="@drawable/ic_settings_nav" />
+            <Button android:id="@+id/tileProfiles" style="@style/IconBtn" android:drawableStart="@drawable/ic_profiles_nav" />
 
             <TextClock
                 android:id="@+id/clock"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="22dp"
+                android:layout_marginStart="22dp"
                 android:fontFamily="sans-serif-light"
                 android:textColor="@color/text"
                 android:textSize="26sp" />
@@ -121,7 +122,7 @@
             android:layout_weight="1"
             android:gravity="bottom"
             android:orientation="vertical"
-            android:paddingLeft="56dp"
+            android:paddingStart="56dp"
             android:paddingBottom="10dp">
 
             <TextView

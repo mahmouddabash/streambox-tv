@@ -2,14 +2,14 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true">
         <shape android:shape="rectangle">
-            <gradient android:angle="0" android:startColor="@color/accent" android:endColor="@color/accent2" />
+            <gradient android:angle="0" android:startColor="?attr/sbAccent" android:endColor="?attr/sbAccent2" />
             <corners android:radius="24dp" />
             <stroke android:width="2dp" android:color="#E6FFFFFF" />
         </shape>
     </item>
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
-            <gradient android:angle="0" android:startColor="@color/accent_dark" android:endColor="@color/accent" />
+            <gradient android:angle="0" android:startColor="?attr/sbAccentDark" android:endColor="?attr/sbAccent" />
             <corners android:radius="24dp" />
         </shape>
     </item>
@@ -17,7 +17,7 @@
         <shape android:shape="rectangle">
             <solid android:color="#337C5CFF" />
             <corners android:radius="24dp" />
-            <stroke android:width="1.5dp" android:color="@color/accent" />
+            <stroke android:width="1.5dp" android:color="?attr/sbAccent" />
         </shape>
     </item>
     <item>

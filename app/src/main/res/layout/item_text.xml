@@ -11,7 +11,7 @@
     android:stateListAnimator="@animator/focus_lift_small"
     android:gravity="center_vertical"
     android:maxLines="1"
-    android:paddingLeft="18dp"
-    android:paddingRight="14dp"
+    android:paddingStart="18dp"
+    android:paddingEnd="14dp"
     android:textColor="@color/text"
     android:textSize="15sp" />

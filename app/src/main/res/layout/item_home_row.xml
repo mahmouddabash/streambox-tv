@@ -12,7 +12,7 @@
         style="@style/RowTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="56dp" />
+        android:layout_marginStart="56dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rowList"
@@ -20,8 +20,8 @@
         android:layout_height="wrap_content"
         android:clipChildren="false"
         android:clipToPadding="false"
-        android:paddingLeft="46dp"
+        android:paddingStart="46dp"
         android:paddingTop="6dp"
-        android:paddingRight="46dp"
+        android:paddingEnd="46dp"
         android:paddingBottom="10dp" />
 </LinearLayout>
