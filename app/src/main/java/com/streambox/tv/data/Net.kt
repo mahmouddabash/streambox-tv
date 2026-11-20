@@ -114,8 +114,27 @@ object Net {
      * directly over UDP, then over HTTPS. The error lists why each step failed.
      */
     private object FallbackDns : Dns {
+        private const val TTL = 10 * 60_000L
+        private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<InetAddress>>>()
+        /** When the TV's own DNS failed recently we skip it, instead of waiting for it to time out on every request. */
+        @Volatile
+        private var systemFailedAt = 0L
+
         override fun lookup(hostname: String): List<InetAddress> {
+            val now = System.currentTimeMillis()
+            cache[hostname]?.let { (at, list) -> if (now - at < TTL) return list }
+            val result = resolve(hostname)
+            cache[hostname] = now to result
+            return result
+        }
+
+        private fun resolve(hostname: String): List<InetAddress> {
+            // Literal IP addresses need no lookup.
+            if (hostname.isNotEmpty() && (hostname[0].isDigit() || hostname.contains(':'))) {
+                try { return Dns.SYSTEM.lookup(hostname) } catch (_: Exception) { }
+            }
             val why = ArrayList<String>()
+            val skipSystem = System.currentTimeMillis() - systemFailedAt < TTL
             fun attempt(label: String, block: () -> List<InetAddress>): List<InetAddress>? =
                 try {
                     block().ifEmpty { why.add("$label: no address"); null }
@@ -124,13 +143,17 @@ object Net {
                     null
                 }
 
-            attempt("system") { Dns.SYSTEM.lookup(hostname) }?.let { return it }
+            if (!skipSystem) {
+                attempt("system") { Dns.SYSTEM.lookup(hostname) }?.let { return it }
+                systemFailedAt = System.currentTimeMillis()
+            }
             for (server in listOf("8.8.8.8", "1.1.1.1", "9.9.9.9")) {
                 attempt("udp $server") { udpLookup(hostname, server) }?.let { return it }
             }
             dohResolvers.forEachIndexed { i, resolver ->
                 attempt("https ${i + 1}") { resolver.lookup(hostname) }?.let { return it }
             }
+            if (skipSystem) attempt("system") { Dns.SYSTEM.lookup(hostname) }?.let { systemFailedAt = 0L; return it }
             throw UnknownHostException("Unable to resolve host \"$hostname\" [${why.joinToString("; ")}]")
         }
     }

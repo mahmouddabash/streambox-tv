@@ -383,7 +383,11 @@ class HomeActivity : AppCompatActivity() {
             return
         }
         lifecycleScope.launch {
-            val result = imageLoader.execute(ImageRequest.Builder(this@HomeActivity).data(url).build())
+            delay(180) // skip images for titles the user only scrolls past
+            if (token != heroToken) return@launch
+            val result = imageLoader.execute(
+                ImageRequest.Builder(this@HomeActivity).data(url).size(1280, 720).allowHardware(true).build()
+            )
             val d = (result as? SuccessResult)?.drawable ?: return@launch
             if (token != heroToken) return@launch
             val (show, hide) = if (heroA.alpha >= heroB.alpha) heroB to heroA else heroA to heroB
@@ -391,11 +395,9 @@ class HomeActivity : AppCompatActivity() {
             show.setImageDrawable(d)
             show.scaleX = 1.0f
             show.scaleY = 1.0f
-            show.animate().alpha(0.85f).setDuration(550).withEndAction {
-                show.animate().scaleX(1.08f).scaleY(1.08f).setDuration(14_000).setInterpolator(LinearInterpolator()).start()
-            }.start()
+            show.animate().alpha(0.85f).setDuration(400).start()
             hide.animate().cancel()
-            hide.animate().alpha(0f).setDuration(550).start()
+            hide.animate().alpha(0f).setDuration(400).start()
         }
     }
 

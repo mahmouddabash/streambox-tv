@@ -21,6 +21,7 @@ object PlayerFactory {
 
     fun build(context: Context): ExoPlayer {
         val http = OkHttpDataSource.Factory(Net.client).setUserAgent(Net.userAgent())
+            .setCacheControl(okhttp3.CacheControl.FORCE_NETWORK)
         val dataSource = DefaultDataSource.Factory(context, http)
         val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
 
@@ -39,7 +40,17 @@ object PlayerFactory {
         val bandwidth = DefaultBandwidthMeter.Builder(context)
             .setInitialBitrateEstimate(25_000_000L)
             .build()
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 50_000,
+                /* bufferForPlaybackMs = */ 1_000,
+                /* bufferForPlaybackAfterRebufferMs = */ 2_000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
         return ExoPlayer.Builder(context, renderers)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSource))
             .setTrackSelector(selector)
             .setBandwidthMeter(bandwidth)

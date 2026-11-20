@@ -3,16 +3,14 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true">
         <set>
-            <objectAnimator android:duration="160" android:propertyName="scaleX" android:valueTo="1.07" android:valueType="floatType" android:interpolator="@android:interpolator/decelerate_cubic" />
-            <objectAnimator android:duration="160" android:propertyName="scaleY" android:valueTo="1.07" android:valueType="floatType" android:interpolator="@android:interpolator/decelerate_cubic" />
-            <objectAnimator android:duration="160" android:propertyName="translationZ" android:valueTo="12dp" android:valueType="floatType" />
+            <objectAnimator android:duration="120" android:propertyName="scaleX" android:valueTo="1.07" android:valueType="floatType" android:interpolator="@android:interpolator/decelerate_cubic" />
+            <objectAnimator android:duration="120" android:propertyName="scaleY" android:valueTo="1.07" android:valueType="floatType" android:interpolator="@android:interpolator/decelerate_cubic" />
         </set>
     </item>
     <item>
         <set>
-            <objectAnimator android:duration="140" android:propertyName="scaleX" android:valueTo="1.0" android:valueType="floatType" />
-            <objectAnimator android:duration="140" android:propertyName="scaleY" android:valueTo="1.0" android:valueType="floatType" />
-            <objectAnimator android:duration="140" android:propertyName="translationZ" android:valueTo="0" android:valueType="floatType" />
+            <objectAnimator android:duration="100" android:propertyName="scaleX" android:valueTo="1.0" android:valueType="floatType" />
+            <objectAnimator android:duration="100" android:propertyName="scaleY" android:valueTo="1.0" android:valueType="floatType" />
         </set>
     </item>
 </selector>
