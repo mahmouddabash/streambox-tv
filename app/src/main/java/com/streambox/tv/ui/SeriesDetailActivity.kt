@@ -51,6 +51,29 @@ class SeriesDetailActivity : AppCompatActivity() {
         if (s.genre.isNotBlank()) parts.add(s.genre)
         findViewById<TextView>(R.id.meta).text = parts.joinToString("   •   ")
 
+        val btnTrailer = findViewById<android.widget.Button>(R.id.btnTrailer)
+        fun showTrailer(id: String) {
+            if (id.isEmpty() || btnTrailer.visibility == View.VISIBLE) return
+            btnTrailer.visibility = View.VISIBLE
+            btnTrailer.setOnClickListener { Ui.openTrailer(this, id) }
+        }
+        lifecycleScope.launch {
+            // Extras arrive with the episode list; wait for them, then ask TMDB if enabled.
+            var extra: com.streambox.tv.data.MovieInfo? = null
+            repeat(40) {
+                extra = Repo.seriesExtras[s.id]
+                if (extra != null) return@repeat
+                kotlinx.coroutines.delay(250)
+            }
+            extra?.let { e ->
+                if (e.backdrop.isNotBlank()) Ui.backdrop(findViewById(R.id.backdrop), e.backdrop)
+                showTrailer(e.trailer)
+            }
+            val t = com.streambox.tv.data.Tmdb.details(false, extra?.tmdbId ?: "", s.name) ?: return@launch
+            if (t.backdrop.isNotBlank()) Ui.backdrop(findViewById(R.id.backdrop), t.backdrop)
+            showTrailer(t.trailer)
+        }
+
         btnFav.setOnClickListener {
             Prefs.toggleFavourite(Repo.profileId, Prefs.FAV_SERIES, s.id)
             updateFav()

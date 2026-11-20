@@ -82,8 +82,27 @@
 
                 <Button android:id="@+id/btnPlay" style="@style/BtnPrimary" android:drawableLeft="@drawable/ic_play_btn" android:text="Play" />
                 <Button android:id="@+id/btnResume" style="@style/Btn" android:text="Resume" android:visibility="gone" />
+                <Button android:id="@+id/btnTrailer" style="@style/Btn" android:text="▶  Trailer" android:visibility="gone" />
                 <Button android:id="@+id/btnFav" style="@style/Btn" android:text="+ My list" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/castTitle"
+                style="@style/RowTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:text="Cast"
+                android:visibility="gone" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/cast"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:visibility="gone" />
         </LinearLayout>
 
         <ImageView

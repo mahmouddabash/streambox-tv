@@ -94,7 +94,10 @@ data class MovieInfo(
     val releaseDate: String = "",
     val duration: String = "",
     val rating: String = "",
-    val backdrop: String = ""
+    val backdrop: String = "",
+    /** YouTube video id of the trailer, if the provider has one. */
+    val trailer: String = "",
+    val tmdbId: String = ""
 )
 
 /** One entry of the playback queue handed to the player. */

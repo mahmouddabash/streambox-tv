@@ -46,6 +46,15 @@
             android:layout_marginTop="12dp"
             android:layout_marginRight="0dp"
             android:text="☆ Favourite" />
+
+        <Button
+            android:id="@+id/btnTrailer"
+            style="@style/Btn"
+            android:layout_width="match_parent"
+            android:layout_marginTop="10dp"
+            android:layout_marginRight="0dp"
+            android:text="▶  Trailer"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout

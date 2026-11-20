@@ -169,6 +169,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         player = p
         playerView.player = p
+        PlayerFactory.styleSubtitles(playerView)
         p.addListener(listener)
     }
 
@@ -202,6 +203,7 @@ class PlayerActivity : AppCompatActivity() {
         val item = current
         shiftStartMs = 0L
         pausedAtMs = 0L
+        extraSubs = emptyList()
         handler.removeCallbacks(shiftTicker)
         shiftView.visibility = View.GONE
         Repo.queueIndex = index
@@ -223,11 +225,15 @@ class PlayerActivity : AppCompatActivity() {
         showOverlay()
     }
 
+    /** Subtitles downloaded for the current item (kept when the player is rebuilt). */
+    private var extraSubs: List<androidx.media3.common.MediaItem.SubtitleConfiguration> = emptyList()
+
     private fun load(url: String, mimeType: String?) {
         val p = player ?: return
         attemptUrl = url
         attemptMime = mimeType
-        p.setMediaItem(PlayerFactory.mediaItem(url, mimeType))
+        val item = PlayerFactory.mediaItem(url, mimeType)
+        p.setMediaItem(if (extraSubs.isEmpty()) item else item.buildUpon().setSubtitleConfigurations(extraSubs).build())
         if (startPos > 0) p.seekTo(startPos)
         p.prepare()
         p.playWhenReady = true
@@ -833,6 +839,8 @@ class PlayerActivity : AppCompatActivity() {
         options.add("Quality: ${qualityLabel(p)}" to { qualityMenu() })
         options.add("Audio track" to { trackMenu(C.TRACK_TYPE_AUDIO, "Audio track") })
         options.add("Subtitles" to { trackMenu(C.TRACK_TYPE_TEXT, "Subtitles") })
+        if (!current.isLive) options.add("Find subtitles online (OpenSubtitles)" to { findSubtitles() })
+        options.add("Subtitle style" to { subtitleStyleMenu() })
         options.add("Aspect ratio: ${resizeNames[resizeIdx]}" to {
             resizeIdx = (resizeIdx + 1) % resizeModes.size
             playerView.resizeMode = resizeModes[resizeIdx]
@@ -882,6 +890,89 @@ class PlayerActivity : AppCompatActivity() {
                 rebuildPlayer()
             }
             .show()
+    }
+
+    private fun subtitleStyleMenu() {
+        val sizes = arrayOf("Small", "Normal", "Large", "Extra large")
+        val colors = arrayOf("White", "Yellow", "Cyan")
+        val bgs = arrayOf("Outline", "Dark box", "Shadow")
+        val rows = arrayOf(
+            "Size: ${sizes[Prefs.subtitleSize.coerceIn(0, 3)]}",
+            "Colour: ${colors[Prefs.subtitleColor.coerceIn(0, 2)]}",
+            "Background: ${bgs[Prefs.subtitleBackground.coerceIn(0, 2)]}"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Subtitle style")
+            .setItems(rows) { _, w ->
+                when (w) {
+                    0 -> Prefs.subtitleSize = (Prefs.subtitleSize + 1) % 4
+                    1 -> Prefs.subtitleColor = (Prefs.subtitleColor + 1) % 3
+                    else -> Prefs.subtitleBackground = (Prefs.subtitleBackground + 1) % 3
+                }
+                PlayerFactory.styleSubtitles(playerView)
+                subtitleStyleMenu()
+            }
+            .setPositiveButton("Done", null)
+            .show()
+    }
+
+    private fun findSubtitles() {
+        if (!com.streambox.tv.data.OpenSubtitles.enabled) {
+            AlertDialog.Builder(this)
+                .setTitle("OpenSubtitles")
+                .setMessage("Add a free OpenSubtitles API key in Settings → Online services, then try again.\n\nGet one at opensubtitles.com → Profile → API consumers.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+        val title = current.title
+        toast("Searching subtitles…")
+        lifecycleScope.launch {
+            val results = try {
+                com.streambox.tv.data.OpenSubtitles.search(title)
+            } catch (e: Exception) {
+                toast("Subtitle search failed: ${e.message}")
+                return@launch
+            }
+            if (results.isEmpty()) {
+                toast("No subtitles found for this title")
+                return@launch
+            }
+            val top = results.take(25)
+            val labels = top.map {
+                "${java.util.Locale(it.language).displayLanguage.ifBlank { it.language }}  •  ${it.release.take(60)}  •  ⬇ ${it.downloads}"
+            }.toTypedArray()
+            AlertDialog.Builder(this@PlayerActivity)
+                .setTitle("Choose subtitles")
+                .setItems(labels) { _, w -> applyDownloadedSubtitle(top[w]) }
+                .show()
+        }
+    }
+
+    private fun applyDownloadedSubtitle(r: com.streambox.tv.data.OpenSubtitles.Result) {
+        lifecycleScope.launch {
+            val file = try {
+                com.streambox.tv.data.OpenSubtitles.download(this@PlayerActivity, r)
+            } catch (e: Exception) {
+                toast("Download failed: ${e.message}")
+                return@launch
+            }
+            val p = player ?: return@launch
+            extraSubs = listOf(
+                androidx.media3.common.MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                    .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                    .setLanguage(r.language)
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build()
+            )
+            startPos = p.currentPosition
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage(r.language)
+                .build()
+            load(attemptUrl, attemptMime)
+            toast("Subtitles added")
+        }
     }
 
     private fun speedMenu() {

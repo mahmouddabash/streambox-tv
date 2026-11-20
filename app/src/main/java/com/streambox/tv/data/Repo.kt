@@ -623,7 +623,9 @@ object Repo {
                 releaseDate = str(info, "releasedate", "release_date"),
                 duration = str(info, "duration"),
                 rating = str(info, "rating"),
-                backdrop = firstOf(info.opt("backdrop_path"))
+                backdrop = firstOf(info.opt("backdrop_path")),
+                trailer = youtubeId(str(info, "youtube_trailer", "trailer")),
+                tmdbId = str(info, "tmdb_id", "tmdb")
             )
         } catch (_: Exception) {
             MovieInfo()
@@ -635,6 +637,15 @@ object Repo {
         val p = profile ?: return@withContext emptyMap()
         val root = JSONObject(Net.getString(api(p, "get_series_info", "&series_id=$seriesId")))
         val out = java.util.TreeMap<Int, MutableList<Episode>>()
+        root.optJSONObject("info")?.let { info ->
+            seriesExtras[seriesId] = MovieInfo(
+                backdrop = firstOf(info.opt("backdrop_path")),
+                trailer = youtubeId(str(info, "youtube_trailer", "trailer")),
+                tmdbId = str(info, "tmdb_id", "tmdb"),
+                cast = str(info, "cast"),
+                director = str(info, "director")
+            )
+        }
 
         fun addAll(arr: JSONArray, seasonHint: Int) {
             for (i in 0 until arr.length()) {
@@ -675,6 +686,17 @@ object Repo {
         }
         for (l in out.values) l.sortBy { it.num }
         out
+    }
+
+    /** Backdrop, trailer and TMDB id from get_series_info, filled when episodes load. */
+    val seriesExtras = java.util.concurrent.ConcurrentHashMap<String, MovieInfo>()
+
+    /** Accepts a bare YouTube id or any YouTube URL. */
+    fun youtubeId(s: String): String {
+        val t = s.trim()
+        if (t.isEmpty()) return ""
+        Regex("(?:v=|youtu\\.be/|embed/|shorts/)([A-Za-z0-9_-]{11})").find(t)?.let { return it.groupValues[1] }
+        return if (Regex("^[A-Za-z0-9_-]{11}$").matches(t)) t else ""
     }
 
     private fun str(o: JSONObject, vararg keys: String): String {

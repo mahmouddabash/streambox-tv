@@ -108,6 +108,53 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 .show()
         })
+        rows.add(Row("Subtitle style", "Size, colour and background of subtitles") {
+            val sizes = arrayOf("Small", "Normal", "Large", "Extra large")
+            val colors = arrayOf("White", "Yellow", "Cyan")
+            val bgs = arrayOf("Outline", "Dark box", "Shadow")
+            AlertDialog.Builder(this)
+                .setTitle("Subtitle style")
+                .setItems(arrayOf(
+                    "Size: ${sizes[Prefs.subtitleSize.coerceIn(0, 3)]}",
+                    "Colour: ${colors[Prefs.subtitleColor.coerceIn(0, 2)]}",
+                    "Background: ${bgs[Prefs.subtitleBackground.coerceIn(0, 2)]}"
+                )) { _, w ->
+                    when (w) {
+                        0 -> choose("Subtitle size", sizes, Prefs.subtitleSize) { Prefs.subtitleSize = it }
+                        1 -> choose("Subtitle colour", colors, Prefs.subtitleColor) { Prefs.subtitleColor = it }
+                        else -> choose("Subtitle background", bgs, Prefs.subtitleBackground) { Prefs.subtitleBackground = it }
+                    }
+                }
+                .show()
+        })
+        rows.add(Row("Subtitle languages (online)", Prefs.subtitleLanguages.ifBlank { "en" } + "  (comma-separated codes, e.g. ar,en)") {
+            Ui.input(this, "Subtitle languages", Prefs.subtitleLanguages, InputType.TYPE_CLASS_TEXT) {
+                Prefs.subtitleLanguages = it
+                refresh()
+            }
+        })
+        rows.add(Row("OpenSubtitles API key", if (Prefs.openSubtitlesKey.isBlank()) "Not set. Free key from opensubtitles.com → API consumers; enables “Find subtitles online”" else "Set ✓") {
+            Ui.input(this, "OpenSubtitles API key", Prefs.openSubtitlesKey, InputType.TYPE_CLASS_TEXT) {
+                Prefs.openSubtitlesKey = it
+                refresh()
+            }
+        })
+        rows.add(Row("TMDB API key", if (Prefs.tmdbKey.isBlank()) "Not set. Free key from themoviedb.org → Settings → API; adds HD backdrops, cast photos and trailers" else "Set ✓") {
+            Ui.input(this, "TMDB API key (v3)", Prefs.tmdbKey, InputType.TYPE_CLASS_TEXT) {
+                Prefs.tmdbKey = it
+                refresh()
+            }
+        })
+        val dirs = com.streambox.tv.data.Recorder.storageDirs(this)
+        rows.add(Row("Recording location", com.streambox.tv.data.Recorder.storageDir(this).absolutePath +
+            if (dirs.size > 1) "   •   ${dirs.size} drives found" else "   •   plug in a USB drive to record to it") {
+            val labels = dirs.mapIndexed { i, d -> (if (i == 0) "TV storage" else "USB / SD card $i") + "   " + d.absolutePath }.toTypedArray()
+            choose("Record to", labels, Prefs.recordingStorage.coerceIn(0, (dirs.size - 1).coerceAtLeast(0))) { Prefs.recordingStorage = it }
+        })
+        rows.add(Row("Picture-in-picture on Home button", if (Prefs.autoPip) "On: keep watching in a small window" else "Off") {
+            Prefs.autoPip = !Prefs.autoPip
+            refresh()
+        })
         rows.add(Row("Parental control", if (Prefs.parentalEnabled) "PIN is set. Adult categories and locked categories ask for it" else "Off. Set a PIN to lock categories") {
             parental()
         })

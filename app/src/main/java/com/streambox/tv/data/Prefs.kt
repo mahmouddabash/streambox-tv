@@ -186,6 +186,34 @@ object Prefs {
         get() = sp.getInt("recStorage", 0)
         set(v) = sp.edit().putInt("recStorage", v).apply()
 
+    var tmdbKey: String
+        get() = sp.getString("tmdbKey", "") ?: ""
+        set(v) = sp.edit().putString("tmdbKey", v.trim()).apply()
+
+    var openSubtitlesKey: String
+        get() = sp.getString("osKey", "") ?: ""
+        set(v) = sp.edit().putString("osKey", v.trim()).apply()
+
+    /** Comma-separated ISO codes for downloaded subtitles, e.g. "ar,en". */
+    var subtitleLanguages: String
+        get() = sp.getString("subLangs", "ar,en") ?: "ar,en"
+        set(v) = sp.edit().putString("subLangs", v.replace(" ", "").lowercase()).apply()
+
+    /** 0 small, 1 normal, 2 large, 3 extra large */
+    var subtitleSize: Int
+        get() = sp.getInt("subSize", 1)
+        set(v) = sp.edit().putInt("subSize", v).apply()
+
+    /** 0 white, 1 yellow, 2 cyan */
+    var subtitleColor: Int
+        get() = sp.getInt("subColor", 0)
+        set(v) = sp.edit().putInt("subColor", v).apply()
+
+    /** 0 outline, 1 dark box, 2 drop shadow */
+    var subtitleBackground: Int
+        get() = sp.getInt("subBg", 0)
+        set(v) = sp.edit().putInt("subBg", v).apply()
+
     var lastUpdateCheck: Long
         get() = sp.getLong("lastUpdateCheck", 0L)
         set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()

@@ -51,8 +51,26 @@ class MovieDetailActivity : AppCompatActivity() {
         updateFav()
         btnPlay.requestFocus()
 
+        val btnTrailer = findViewById<Button>(R.id.btnTrailer)
         lifecycleScope.launch {
             val info = Repo.movieInfo(m)
+            var trailer = info.trailer
+            if (trailer.isNotEmpty()) {
+                btnTrailer.visibility = View.VISIBLE
+                btnTrailer.setOnClickListener { Ui.openTrailer(this@MovieDetailActivity, trailer) }
+            }
+            // Optional TMDB enrichment: HD backdrop, cast photos, trailer.
+            launch {
+                val t = com.streambox.tv.data.Tmdb.details(true, info.tmdbId, m.name) ?: return@launch
+                if (t.backdrop.isNotBlank()) Ui.backdrop(backdrop, t.backdrop)
+                if (trailer.isEmpty() && t.trailer.isNotEmpty()) {
+                    trailer = t.trailer
+                    btnTrailer.visibility = View.VISIBLE
+                    btnTrailer.setOnClickListener { Ui.openTrailer(this@MovieDetailActivity, t.trailer) }
+                }
+                if (plot.text.isNullOrBlank() && t.overview.isNotBlank()) plot.text = t.overview
+                if (t.cast.isNotEmpty()) showCast(t.cast)
+            }
             val parts = ArrayList<String>()
             val rating = info.rating.ifBlank { m.rating }
             if (rating.isNotBlank() && rating != "0") parts.add("★ $rating")
@@ -66,6 +84,22 @@ class MovieDetailActivity : AppCompatActivity() {
             if (info.cast.isNotBlank()) sb.append("\n\nCast: ").append(info.cast)
             plot.text = sb.toString().trim()
         }
+    }
+
+    private fun showCast(cast: List<com.streambox.tv.data.Tmdb.Person>) {
+        val list = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.cast)
+        findViewById<TextView>(R.id.castTitle).visibility = View.VISIBLE
+        list.visibility = View.VISIBLE
+        list.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false)
+        list.adapter = SimpleAdapter(
+            R.layout.item_cast,
+            bind = { v, p, _ ->
+                val img = v.findViewById<ImageView>(R.id.photo)
+                if (p.photo.isNotBlank()) img.loadUrl(p.photo) else img.setImageDrawable(null)
+                v.findViewById<TextView>(R.id.name).text = p.name
+                v.findViewById<TextView>(R.id.role).text = p.role
+            }
+        ).also { it.submit(cast) }
     }
 
     override fun onResume() {

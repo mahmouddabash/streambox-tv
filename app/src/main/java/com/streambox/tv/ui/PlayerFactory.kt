@@ -47,6 +47,22 @@ object PlayerFactory {
             .build()
     }
 
+    /** Applies the subtitle size, colour and background chosen in Settings. */
+    fun styleSubtitles(view: androidx.media3.ui.PlayerView) {
+        val sv = view.subtitleView ?: return
+        val fg = when (Prefs.subtitleColor) { 1 -> 0xFFFFE14D.toInt(); 2 -> 0xFF7FE7FF.toInt(); else -> 0xFFFFFFFF.toInt() }
+        val (bg, edge) = when (Prefs.subtitleBackground) {
+            1 -> 0xB3000000.toInt() to androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
+            2 -> 0x00000000 to androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+            else -> 0x00000000 to androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
+        }
+        sv.setApplyEmbeddedStyles(false)
+        sv.setApplyEmbeddedFontSizes(false)
+        sv.setStyle(androidx.media3.ui.CaptionStyleCompat(fg, bg, 0x00000000, edge, 0xFF000000.toInt(), android.graphics.Typeface.DEFAULT_BOLD))
+        val scale = floatArrayOf(0.8f, 1.0f, 1.3f, 1.65f)[Prefs.subtitleSize.coerceIn(0, 3)]
+        sv.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * scale)
+    }
+
     /** Effects for the chosen picture mode (empty = untouched, zero overhead). */
     fun effects(): List<androidx.media3.common.Effect> {
         val mode = PictureMode.of(Prefs.pictureMode)

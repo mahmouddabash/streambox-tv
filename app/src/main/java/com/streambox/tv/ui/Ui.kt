@@ -39,6 +39,22 @@ fun ImageView.loadUrl(url: String?) {
 }
 
 object Ui {
+    /** Opens a YouTube trailer in the YouTube app (or browser). */
+    fun openTrailer(activity: Activity, youtubeId: String) {
+        val tries = listOf(
+            Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$youtubeId")),
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$youtubeId"))
+        )
+        for (i in tries) {
+            try {
+                activity.startActivity(i)
+                return
+            } catch (_: Exception) {
+            }
+        }
+        activity.toast("Install the YouTube app to watch trailers")
+    }
+
     /** Loads a full-screen backdrop and fades it in (skips reloading the same URL). */
     fun backdrop(view: ImageView, url: String?) {
         if (url.isNullOrBlank() || view.tag == url) return
