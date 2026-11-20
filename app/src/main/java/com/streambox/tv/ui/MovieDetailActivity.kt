@@ -91,7 +91,7 @@ class MovieDetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.castTitle).visibility = View.VISIBLE
         list.visibility = View.VISIBLE
         list.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false)
-        list.adapter = SimpleAdapter(
+        list.adapter = SimpleAdapter<com.streambox.tv.data.Tmdb.Person>(
             R.layout.item_cast,
             bind = { v, p, _ ->
                 val img = v.findViewById<ImageView>(R.id.photo)
@@ -99,7 +99,7 @@ class MovieDetailActivity : AppCompatActivity() {
                 v.findViewById<TextView>(R.id.name).text = p.name
                 v.findViewById<TextView>(R.id.role).text = p.role
             }
-        ).also { it.submit(cast) }
+        ).also { a -> a.submit(cast) }
     }
 
     override fun onResume() {
