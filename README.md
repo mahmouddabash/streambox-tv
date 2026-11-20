@@ -69,6 +69,25 @@ Rename the app or package: change `app_name` in `res/values/strings.xml`, and `a
 - No recording, no multi-screen, no Chromecast, no cloud sync of profiles.
 - Before publishing on Google Play: add your own icon/banner artwork, a release signing key, and a privacy policy.
 
+## What's new
+
+| Feature | How to use it |
+|---|---|
+| **Update from inside the app** | Checked once a day on the home screen; also **Settings → Check for updates**. One click downloads and installs the new build |
+| **Search everything** | 🔍 on the home screen (or the remote's search/mic key): channels, movies and series at once, with **voice search** |
+| **Channel numbers** | Type digits on the remote while watching live TV; the **LAST** key (or player menu) returns to the previous channel |
+| **Pause & rewind live TV** | ⏯ pauses; on channels with catch-up (⟲) it continues from where you paused, ⏪/⏩ rewind or skip a minute, the menu has *Rewind 5 minutes*, *Watch from the start* and *Back to live* |
+| **Series in Continue watching** | Unfinished episodes now appear on the home row next to movies |
+| **Multi-screen** | ▦ on the home screen or the player menu: 2 or 4 channels at once, the selected screen plays its sound, OK changes its channel, long-press OK opens it full screen |
+| **Reminders** | In a channel's guide, choose an upcoming programme → *Remind me*; a pop-up (or notification) offers *Watch now* when it starts |
+| **Recording** | Player menu → *Record*, or a programme in the guide → *Record*. Saves .ts files to the TV or a USB drive (**Settings → Recording location**); ⏺ on the home screen lists, plays and deletes recordings |
+| **Trailers & TMDB** | *▶ Trailer* on movie/series pages (opens YouTube). Add a free TMDB key in Settings for HD backdrops, cast photos and more trailers |
+| **Subtitles** | Player menu → *Subtitle style* (size, colour, background) and *Find subtitles online* (free OpenSubtitles key in Settings; languages default to Arabic + English) |
+| **Arabic interface** | **Settings → Language → العربية** switches the whole interface to Arabic, right-to-left |
+| **Theme colours** | **Settings → Theme colour**: Violet, Ocean, Sunset, Emerald, Gold, Rose |
+| **Sleep timer** | Player menu → *Sleep timer* (15 min – 2 h) |
+| **Picture-in-picture** | Press Home while watching (or player menu → *Picture-in-picture*) to keep it playing in a small window |
+
 ## iPhone & iPad version
 
 A native SwiftUI version lives in [`ios/`](ios/) with the same look and features: profiles (Xtream / M3U), home with hero banner and Continue watching, Live TV with now-playing and catch-up, Movies, Series, parental PIN and resume-where-you-left-off. It uses Apple's player (AirPlay and Picture-in-Picture for movies); live channels are played as HLS (.m3u8). Titles in MKV/AVI that the provider can't serve as HLS show an **Open in VLC** button.

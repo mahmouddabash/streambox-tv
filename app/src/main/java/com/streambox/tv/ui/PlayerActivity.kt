@@ -78,6 +78,9 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
     private val sleepRunnable = Runnable { sleepNow() }
+    /** Set when we open another screen ourselves, so that doesn't trigger picture-in-picture. */
+    private var leavingInternally = false
+    private var wasInPip = false
 
     private var player: ExoPlayer? = null
     private var items: List<PlayItem> = emptyList()
@@ -184,8 +187,18 @@ class PlayerActivity : AppCompatActivity() {
         load(attemptUrl, attemptMime)
     }
 
+    override fun onResume() {
+        super.onResume()
+        leavingInternally = false
+    }
+
     override fun onStop() {
         super.onStop()
+        // The picture-in-picture window was closed: end playback instead of lingering in the background.
+        if (wasInPip && Build.VERSION.SDK_INT >= 24 && !isInPictureInPictureMode) {
+            wasInPip = false
+            finish()
+        }
         handler.removeCallbacksAndMessages(null)
         savePosition()
         // After leaving and coming back, always continue where we were.
@@ -315,6 +328,7 @@ class PlayerActivity : AppCompatActivity() {
             val i = Intent(Intent.ACTION_VIEW)
             i.setDataAndType(Uri.parse(current.url), "video/*")
             i.putExtra("title", current.title)
+            leavingInternally = true
             startActivity(i)
         } catch (_: Exception) {
             toast("No external player installed. Install VLC or MX Player from the Play Store.")
@@ -564,11 +578,17 @@ class PlayerActivity : AppCompatActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // Home button while playing: keep watching in a small window.
-        if (Prefs.autoPip && player?.isPlaying == true) enterPip()
+        if (Prefs.autoPip && !leavingInternally && player?.isPlaying == true) enterPip()
     }
 
     override fun onPictureInPictureModeChanged(isInPip: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPip, newConfig)
+        if (!isInPip && lifecycle.currentState == androidx.lifecycle.Lifecycle.State.CREATED) {
+            // Closed from the small window (not expanded): stop playback.
+            finish()
+            return
+        }
+        wasInPip = isInPip
         if (isInPip) {
             overlay.visibility = View.GONE
             numberView.visibility = View.GONE
@@ -605,6 +625,7 @@ class PlayerActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Multi-screen")
             .setItems(arrayOf("2 screens", "4 screens")) { _, w ->
+                leavingInternally = true
                 startActivity(Intent(this, MultiViewActivity::class.java)
                     .putExtra(MultiViewActivity.EXTRA_COUNT, if (w == 0) 2 else 4)
                     .putExtra(MultiViewActivity.EXTRA_CHANNEL, current.channelId))
