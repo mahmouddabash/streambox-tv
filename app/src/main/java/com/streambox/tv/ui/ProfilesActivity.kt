@@ -32,8 +32,11 @@ class ProfilesActivity : AppCompatActivity() {
             R.layout.item_two_line,
             bind = { v, p, _ ->
                 v.findViewById<TextView>(R.id.line1).text = p.name
-                v.findViewById<TextView>(R.id.line2).text =
-                    if (p.isXtream) "Xtream Codes  •  ${p.server}  •  ${p.username}" else "M3U playlist  •  ${p.m3uUrl}"
+                v.findViewById<TextView>(R.id.line2).text = when {
+                    Prefs.isProtected(p) -> "Built-in profile  •  🔒 login hidden"
+                    p.isXtream -> "Xtream Codes  •  ${p.server}  •  ${p.username}"
+                    else -> "M3U playlist  •  ${p.m3uUrl}"
+                }
             },
             onClick = { p, _ -> open(p) },
             onLongClick = { p, _ -> confirmDelete(p); true }
@@ -56,10 +59,22 @@ class ProfilesActivity : AppCompatActivity() {
     }
 
     private fun open(p: Profile) {
+        if (Prefs.isProtected(p) && !Prefs.protectedUnlocked) {
+            Ui.askProfilePassword(this) { open(p) }
+            return
+        }
         startActivity(Intent(this, HomeActivity::class.java).putExtra(HomeActivity.EXTRA_PROFILE, p.id))
     }
 
     private fun confirmDelete(p: Profile) {
+        if (Prefs.isProtected(p)) {
+            Ui.askProfilePassword(this) { reallyDelete(p) }
+            return
+        }
+        reallyDelete(p)
+    }
+
+    private fun reallyDelete(p: Profile) {
         AlertDialog.Builder(this)
             .setTitle("Delete \"${p.name}\"?")
             .setMessage("Its favourites and locks are removed too.")

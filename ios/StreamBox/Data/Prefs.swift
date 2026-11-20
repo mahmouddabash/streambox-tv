@@ -15,10 +15,21 @@ final class Prefs {
 
     // MARK: Profiles
 
-    private static let defaultProfile = Profile(
-        id: "default", name: "My IPTV", type: Profile.xtream,
-        server: "http://mhav1.com:2095", username: "sa0602", password: "01069979654"
-    )
+    private static var defaultProfile: Profile {
+        Profile(id: "default", name: "My IPTV", type: Profile.xtream,
+                server: Secret.reveal(Secret.defaultServer),
+                username: Secret.reveal(Secret.defaultUser),
+                password: Secret.reveal(Secret.defaultPass))
+    }
+
+    /// The built-in profile: its login is hidden and it needs the profile password.
+    func isProtected(_ p: Profile?) -> Bool { p?.id == "default" }
+
+    /// Set once the profile password has been entered on this device.
+    var protectedUnlocked: Bool {
+        get { d.bool(forKey: "protectedUnlocked") }
+        set { d.set(newValue, forKey: "protectedUnlocked") }
+    }
 
     /// Adds the built-in login once per version; deleting it afterwards keeps it deleted.
     private func seedDefaultProfile() {

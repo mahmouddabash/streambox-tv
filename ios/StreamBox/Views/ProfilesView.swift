@@ -6,6 +6,9 @@ struct ProfilesView: View {
     @State private var showAdd = false
     @State private var editing: Profile?
     @State private var toDelete: Profile?
+    @State private var passwordFor: (Profile, String)?
+    @State private var passwordText = ""
+    @State private var wrongPassword = false
 
     var body: some View {
         NavigationStack {
@@ -27,11 +30,13 @@ struct ProfilesView: View {
                     }
 
                     ForEach(profiles) { p in
-                        Button { onOpen(p) } label: { ProfileRow(profile: p) }
+                        Button {
+                            if Prefs.shared.isProtected(p) && !Prefs.shared.protectedUnlocked { ask(p, "open") } else { onOpen(p) }
+                        } label: { ProfileRow(profile: p) }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                Button { editing = p } label: { Label("Edit", systemImage: "pencil") }
-                                Button(role: .destructive) { toDelete = p } label: { Label("Delete", systemImage: "trash") }
+                                Button { Prefs.shared.isProtected(p) ? ask(p, "edit") : (editing = p) } label: { Label("Edit", systemImage: "pencil") }
+                                Button(role: .destructive) { Prefs.shared.isProtected(p) ? ask(p, "delete") : (toDelete = p) } label: { Label("Delete", systemImage: "trash") }
                             }
                     }
 
@@ -58,6 +63,12 @@ struct ProfilesView: View {
             .background(AppBackground())
             .sheet(isPresented: $showAdd, onDismiss: reload) { AddProfileView(existing: nil) }
             .sheet(item: $editing, onDismiss: reload) { AddProfileView(existing: $0) }
+            .alert("Profile password", isPresented: Binding(get: { passwordFor != nil }, set: { if !$0 { passwordFor = nil } })) {
+                SecureField("Password", text: $passwordText).keyboardType(.numberPad)
+                Button("OK") { checkPassword() }
+                Button("Cancel", role: .cancel) { passwordFor = nil }
+            }
+            .alert("Wrong password", isPresented: $wrongPassword) { Button("OK", role: .cancel) {} }
             .confirmationDialog("Delete \(toDelete?.name ?? "")?", isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
                     if let p = toDelete { Prefs.shared.delete(p) }
@@ -68,6 +79,24 @@ struct ProfilesView: View {
     }
 
     private func reload() { profiles = Prefs.shared.profiles }
+
+    private func ask(_ p: Profile, _ action: String) {
+        passwordText = ""
+        passwordFor = (p, action)
+    }
+
+    private func checkPassword() {
+        guard let pending = passwordFor else { return }
+        let (p, action) = pending
+        passwordFor = nil
+        guard Secret.checkPassword(passwordText) else { wrongPassword = true; return }
+        Prefs.shared.protectedUnlocked = true
+        switch action {
+        case "edit": editing = p
+        case "delete": toDelete = p
+        default: onOpen(p)
+        }
+    }
 }
 
 private struct ProfileRow: View {
@@ -84,7 +113,8 @@ private struct ProfileRow: View {
             .frame(width: 54, height: 54)
             VStack(alignment: .leading, spacing: 4) {
                 Text(profile.name).font(.headline).foregroundColor(Theme.text)
-                Text(profile.isXtream ? "Xtream Codes  •  \(profile.username)" : "M3U playlist")
+                Text(Prefs.shared.isProtected(profile) ? "Built-in profile  •  🔒 login hidden"
+                     : profile.isXtream ? "Xtream Codes  •  \(profile.username)" : "M3U playlist")
                     .font(.subheadline).foregroundColor(Theme.dim).lineLimit(1)
             }
             Spacer()
@@ -148,7 +178,10 @@ struct AddProfileView: View {
             .onAppear {
                 guard let p = existing else { return }
                 isXtream = p.isXtream
-                name = p.name; server = p.server; username = p.username; password = p.password; m3u = p.m3uUrl
+                name = p.name
+                if !Prefs.shared.isProtected(p) {
+                    server = p.server; username = p.username; password = p.password; m3u = p.m3uUrl
+                }
             }
         }
     }
@@ -158,6 +191,14 @@ struct AddProfileView: View {
         var p = Profile(id: existing?.id ?? UUID().uuidString,
                         name: name.trimmingCharacters(in: .whitespaces),
                         type: isXtream ? Profile.xtream : Profile.m3u)
+        if let old = existing, Prefs.shared.isProtected(old), server.isEmpty, username.isEmpty, password.isEmpty {
+            // Hidden login left empty: only the name changes.
+            var keep = old
+            keep.name = p.name.isEmpty ? old.name : p.name
+            Prefs.shared.save(keep)
+            dismiss()
+            return
+        }
         if isXtream {
             guard !server.isEmpty, !username.isEmpty, !password.isEmpty else { error = "Fill in server, username and password"; return }
             p.server = Catalog.normalizeServer(server)

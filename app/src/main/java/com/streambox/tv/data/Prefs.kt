@@ -18,14 +18,23 @@ object Prefs {
         seedDefaultProfile(context)
     }
 
-    private val DEFAULT_PROFILE = Profile(
-        id = "default",
-        name = "My IPTV",
-        type = Profile.TYPE_XTREAM,
-        server = "http://mhav1.com:2095",
-        username = "sa0602",
-        password = "01069979654"
-    )
+    private val DEFAULT_PROFILE: Profile
+        get() = Profile(
+            id = "default",
+            name = "My IPTV",
+            type = Profile.TYPE_XTREAM,
+            server = Secret.reveal(Secret.DEFAULT_SERVER),
+            username = Secret.reveal(Secret.DEFAULT_USER),
+            password = Secret.reveal(Secret.DEFAULT_PASS)
+        )
+
+    /** The built-in profile: its login is hidden and it needs the profile password. */
+    fun isProtected(p: Profile?) = p?.id == "default"
+
+    /** Set once the profile password has been entered on this device. */
+    var protectedUnlocked: Boolean
+        get() = sp.getBoolean("protectedUnlocked", false)
+        set(v) = sp.edit().putBoolean("protectedUnlocked", v).apply()
 
     /**
      * Adds the built-in playlist once per version; deleting it afterwards keeps it deleted.

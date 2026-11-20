@@ -195,7 +195,7 @@ class HomeActivity : AppCompatActivity() {
                 restoreLastScreen()
                 if (force) toast("Content refreshed")
             } catch (e: Exception) {
-                status.text = "Loading failed: ${e.message ?: "network error"}"
+                status.text = Ui.mask("Loading failed: ${e.message ?: "network error"}")
                 setHeroIdle("Couldn't load", profile.name, "Check your connection, then press Refresh (top right) to try again.")
                 findViewById<Button>(R.id.tileRefresh).requestFocus()
             } finally {

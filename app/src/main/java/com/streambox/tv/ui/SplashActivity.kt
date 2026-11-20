@@ -55,7 +55,7 @@ class SplashActivity : AppCompatActivity() {
         done = true
         val profiles = Intent(this, ProfilesActivity::class.java)
         val last = Prefs.profiles().firstOrNull { it.id == Prefs.lastProfileId }
-        if (Prefs.openLastProfile && last != null) {
+        if (Prefs.openLastProfile && last != null && (!Prefs.isProtected(last) || Prefs.protectedUnlocked)) {
             // Profile list underneath (so Back still reaches it), then straight into the last profile.
             startActivities(arrayOf(
                 profiles,

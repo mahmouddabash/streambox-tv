@@ -90,7 +90,8 @@ struct RootView: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                 let prefs = Prefs.shared
-                if prefs.resumeOnLaunch, let last = prefs.profiles.first(where: { $0.id == prefs.lastProfileId }) {
+                if prefs.resumeOnLaunch, let last = prefs.profiles.first(where: { $0.id == prefs.lastProfileId }),
+                   !prefs.isProtected(last) || prefs.protectedUnlocked {
                     active = last
                 }
                 withAnimation(.easeOut(duration: 0.4)) { showSplash = false }

@@ -127,7 +127,7 @@ class SeriesDetailActivity : AppCompatActivity() {
                     episodesView.post { episodesView.requestFocus() }
                 }
             } catch (e: Exception) {
-                status.text = "Could not load episodes: ${e.message ?: "network error"}"
+                status.text = Ui.mask("Could not load episodes: ${e.message ?: "network error"}")
             }
         }
     }

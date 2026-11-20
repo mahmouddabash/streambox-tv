@@ -116,6 +116,30 @@ object Ui {
         edit.requestFocus()
     }
 
+    /** Asks for the built-in profile's password; runs [onOk] only when it is right. */
+    fun askProfilePassword(activity: Activity, onOk: () -> Unit) {
+        input(activity, "Profile password", "", PIN_TYPE) {
+            if (com.streambox.tv.data.Secret.checkPassword(it)) {
+                com.streambox.tv.data.Prefs.protectedUnlocked = true
+                onOk()
+            } else {
+                activity.toast("Wrong password")
+            }
+        }
+    }
+
+    /** Removes the hidden login (server, user name, password) from messages shown on screen. */
+    fun mask(text: String): String {
+        val p = com.streambox.tv.data.Repo.profile ?: return text
+        if (!com.streambox.tv.data.Prefs.isProtected(p)) return text
+        var t = text
+        val host = try { android.net.Uri.parse(p.server).host ?: "" } catch (_: Exception) { "" }
+        for (secret in listOf(p.server, host, p.username, p.password)) {
+            if (secret.length >= 3) t = t.replace(secret, "•••")
+        }
+        return t
+    }
+
     private const val PIN_TYPE = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
 
     fun askPin(activity: Activity, onOk: () -> Unit) {
