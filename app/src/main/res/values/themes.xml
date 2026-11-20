@@ -183,6 +183,7 @@
         <item name="android:textSize">17sp</item>
     </style>
     <!-- Accent colour overlays applied at runtime (Settings → Theme colour) -->
+    <style name="Accent" />
     <style name="Accent.Violet">
         <item name="sbAccent">#7C5CFF</item>
         <item name="sbAccent2">#00D4FF</item>
