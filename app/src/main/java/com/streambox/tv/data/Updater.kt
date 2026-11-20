@@ -62,7 +62,8 @@ object Updater {
                 else -> AlertDialog.Builder(activity)
                     .setTitle("Update available")
                     .setMessage("Build ${r.build} is ready (you have build $currentBuild).\nInstall it now? Your profiles and settings are kept.")
-                    .setPositiveButton("Install now") { _, _ -> download(activity, scope, r) }
+                    .setPositiveButton("Install with Downloader") { _, _ -> openInDownloader(activity) }
+                    .setNeutralButton("Install now") { _, _ -> download(activity, scope, r) }
                     .setNegativeButton("Later", null)
                     .show()
             }
@@ -166,6 +167,45 @@ object Updater {
             .setNegativeButton("OK", null)
             .show()
     }
+
+    private const val DOWNLOADER = "com.esaba.downloader"
+
+    /**
+     * Hands the newest APK link to the Downloader app (already allowed to install on most TVs).
+     * If Downloader can't take the link directly, it is opened and the address is shown to type in.
+     */
+    fun openInDownloader(activity: Activity) {
+        val pm = activity.packageManager
+        val direct = Intent(Intent.ACTION_VIEW, Uri.parse(LINK)).setPackage(DOWNLOADER).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            activity.startActivity(direct)
+            return
+        } catch (_: Exception) {
+        }
+        val launch = pm.getLaunchIntentForPackage(DOWNLOADER)
+            ?: pm.getLeanbackLaunchIntentForPackage(DOWNLOADER)
+        if (launch == null) {
+            AlertDialog.Builder(activity)
+                .setTitle("Downloader isn't installed")
+                .setMessage("Install “Downloader” by AFTVnews from the Play Store, then enter:\n\n$SHORT_LINK")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+        AlertDialog.Builder(activity)
+            .setTitle("Install with Downloader")
+            .setMessage("Downloader will open. Type this address in its box and press Go:\n\n$SHORT_LINK")
+            .setPositiveButton("Open Downloader") { _, _ ->
+                try {
+                    activity.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Exception) {
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    const val SHORT_LINK = "github.com/mahmouddabash/streambox-tv/releases/latest/download/StreamBoxTV.apk"
 
     const val LINK = "https://github.com/mahmouddabash/streambox-tv/releases/latest/download/StreamBoxTV.apk"
 }

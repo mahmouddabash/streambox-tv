@@ -17,6 +17,7 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <queries>
+        <package android:name="com.esaba.downloader" />
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
