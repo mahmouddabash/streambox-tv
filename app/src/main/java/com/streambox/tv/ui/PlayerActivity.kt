@@ -447,7 +447,7 @@ class PlayerActivity : AppCompatActivity() {
             paused > 0 && behind > 20_000 && Repo.canTimeshift(liveChannel) -> startShift(paused)
             paused > 0 && behind > 60_000 -> {
                 // No archive: the buffered stream is too old, reconnect to live.
-                toast("This channel has no catch-up archive, back to live")
+                toast("Back to live")
                 goLive()
             }
             else -> p.play()
@@ -459,7 +459,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun startShift(fromMs: Long) {
         val c = liveChannel ?: return
         if (!Repo.canTimeshift(c)) {
-            toast("Rewind needs a channel with catch-up (⟲)")
+            toast("Rewind isn't available on this channel")
             return
         }
         val now = System.currentTimeMillis()
@@ -477,7 +477,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun rewind(minutes: Int) {
         if (!Repo.canTimeshift(liveChannel)) {
-            toast("Rewind needs a channel with catch-up (⟲)")
+            toast("Rewind isn't available on this channel")
             return
         }
         val target = livePosition() - minutes * 60_000L

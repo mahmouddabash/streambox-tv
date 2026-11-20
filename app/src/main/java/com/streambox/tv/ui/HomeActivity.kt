@@ -100,7 +100,6 @@ class HomeActivity : AppCompatActivity() {
         val live = findViewById<Button>(R.id.tileLive)
         val movies = findViewById<Button>(R.id.tileMovies)
         val series = findViewById<Button>(R.id.tileSeries)
-        val catchup = findViewById<Button>(R.id.tileCatchup)
         val refresh = findViewById<Button>(R.id.tileRefresh)
         val search = findViewById<Button>(R.id.tileSearch)
         search.setOnClickListener { if (Repo.loaded) startActivity(Intent(this, SearchActivity::class.java)) }
@@ -118,7 +117,7 @@ class HomeActivity : AppCompatActivity() {
         rec.setOnClickListener { startActivity(Intent(this, RecordingsActivity::class.java)) }
         val settings = findViewById<Button>(R.id.tileSettings)
         val profiles = findViewById<Button>(R.id.tileProfiles)
-        nav = listOf(live, movies, series, catchup)
+        nav = listOf(live, movies, series)
 
         live.setOnClickListener { startActivity(Intent(this, LiveActivity::class.java)) }
         movies.setOnClickListener {
@@ -128,10 +127,6 @@ class HomeActivity : AppCompatActivity() {
         series.setOnClickListener {
             if (Repo.series.isEmpty()) toast("This profile has no series")
             else startActivity(Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_SERIES))
-        }
-        catchup.setOnClickListener {
-            if (Repo.channels.none { it.hasArchive }) toast("Your provider offers no catch-up channels")
-            else startActivity(Intent(this, LiveActivity::class.java).putExtra(LiveActivity.EXTRA_ARCHIVE_ONLY, true))
         }
         refresh.setOnClickListener { load(true) }
         settings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
@@ -164,8 +159,7 @@ class HomeActivity : AppCompatActivity() {
         intent.removeExtra(EXTRA_RESTORE)
         val target = when (Prefs.lastScreen) {
             Prefs.SCREEN_LIVE -> Intent(this, LiveActivity::class.java)
-            Prefs.SCREEN_CATCHUP -> if (Repo.channels.any { it.hasArchive })
-                Intent(this, LiveActivity::class.java).putExtra(LiveActivity.EXTRA_ARCHIVE_ONLY, true) else null
+            Prefs.SCREEN_CATCHUP -> Intent(this, LiveActivity::class.java)
             Repo.SECTION_VOD -> if (Repo.movies.isNotEmpty())
                 Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_VOD) else null
             Repo.SECTION_SERIES -> if (Repo.series.isNotEmpty())
@@ -349,7 +343,7 @@ class HomeActivity : AppCompatActivity() {
             }
             Kind.CHANNEL -> {
                 val c = Repo.channel(card.id) ?: return
-                heroMeta.text = if (c.hasArchive) "Catch-up available" else ""
+                heroMeta.text = ""
                 setHeroImage("")
                 if (Repo.hasEpgSource) {
                     heroJob = lifecycleScope.launch {
@@ -357,7 +351,7 @@ class HomeActivity : AppCompatActivity() {
                         val list = Repo.upcoming(this@HomeActivity, c)
                         if (heroTitle.text != card.title) return@launch
                         list.getOrNull(0)?.let { pr ->
-                            heroMeta.text = metaLine("Now  ${Ui.time(pr.startMs)} – ${Ui.time(pr.endMs)}", if (c.hasArchive) "Catch-up" else "")
+                            heroMeta.text = metaLine("Now  ${Ui.time(pr.startMs)} – ${Ui.time(pr.endMs)}")
                             heroPlot.text = pr.title + if (pr.desc.isNotBlank()) " — ${pr.desc}" else ""
                         }
                         list.getOrNull(1)?.let { pr ->

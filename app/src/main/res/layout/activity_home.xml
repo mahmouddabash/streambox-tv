@@ -73,7 +73,6 @@
             <Button android:id="@+id/tileLive" style="@style/NavPill" android:text="Live TV" />
             <Button android:id="@+id/tileMovies" style="@style/NavPill" android:text="Movies" />
             <Button android:id="@+id/tileSeries" style="@style/NavPill" android:text="Series" />
-            <Button android:id="@+id/tileCatchup" style="@style/NavPill" android:text="Catch-up" />
 
             <View
                 android:layout_width="0dp"

@@ -16,7 +16,7 @@ import com.streambox.tv.data.Reminders
 import com.streambox.tv.data.Repo
 import kotlinx.coroutines.launch
 
-/** Full guide of one channel. Past programmes play from the provider's archive (catch-up). */
+/** Full guide of one channel: watch what's on now, set reminders or record upcoming programmes. */
 class EpgActivity : AppCompatActivity() {
 
     private lateinit var channel: Channel
@@ -41,7 +41,6 @@ class EpgActivity : AppCompatActivity() {
                 val now = System.currentTimeMillis()
                 var tag = when {
                     p.startMs <= now && p.endMs > now -> "   ● NOW"
-                    p.endMs <= now && canCatchUp(p) -> "   ⟲ catch-up"
                     else -> ""
                 }
                 if (p.startMs > now && Reminders.has(channel.id, p.startMs)) tag += "   ⏰"
@@ -63,8 +62,7 @@ class EpgActivity : AppCompatActivity() {
             adapter.submit(guide, current)
             status.text = when {
                 guide.isEmpty() -> "No programme information for this channel"
-                c.hasArchive -> "Select a past programme marked ⟲ to watch it again"
-                else -> "This channel has no catch-up archive"
+                else -> "Choose a programme to watch, record or set a reminder"
             }
             if (current >= 0) {
                 (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(current, 120)
@@ -73,26 +71,12 @@ class EpgActivity : AppCompatActivity() {
         }
     }
 
-    private fun canCatchUp(p: Programme): Boolean {
-        if (Repo.profile?.isXtream != true) return false
-        if (!channel.hasArchive && !p.hasArchive) return false
-        if (p.hasArchive) return true
-        val days = if (channel.archiveDays > 0) channel.archiveDays else 1
-        return p.startMs > System.currentTimeMillis() - days * 86_400_000L
-    }
-
     private fun onProgramme(p: Programme) {
         val now = System.currentTimeMillis()
         when {
             p.startMs > now -> futureMenu(p)
             p.endMs > now -> nowMenu(p)
-            canCatchUp(p) -> Ui.play(
-                this,
-                listOf(PlayItem("", "${channel.name} – ${p.title}", Repo.catchupUrl(channel, p), false)),
-                0,
-                fromStart = true
-            )
-            else -> toast("Not available in the catch-up archive")
+            else -> toast("This programme has already finished")
         }
     }
 

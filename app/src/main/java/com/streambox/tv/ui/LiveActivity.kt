@@ -25,10 +25,9 @@ import com.streambox.tv.data.Repo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/** Live TV: categories | channels | preview + guide. Also used for the catch-up channel list. */
+/** Live TV: categories | channels | preview + guide. */
 class LiveActivity : AppCompatActivity() {
 
-    private var archiveOnly = false
     private lateinit var catAdapter: SimpleAdapter<Category>
     private lateinit var chAdapter: SimpleAdapter<Channel>
     private lateinit var epgAdapter: SimpleAdapter<Programme>
@@ -54,7 +53,6 @@ class LiveActivity : AppCompatActivity() {
             return
         }
         setContentView(R.layout.activity_live)
-        archiveOnly = intent.getBooleanExtra(EXTRA_ARCHIVE_ONLY, false)
 
         channelsView = findViewById(R.id.channels)
         empty = findViewById(R.id.empty)
@@ -63,8 +61,7 @@ class LiveActivity : AppCompatActivity() {
         previewHint = findViewById(R.id.previewHint)
         channelName = findViewById(R.id.channelName)
         epgStatus = findViewById(R.id.epgStatus)
-        findViewById<TextView>(R.id.title).text = if (archiveOnly) "Catch-up" else "Live TV"
-        if (archiveOnly) previewHint.text = "Pick a channel to browse its past programmes."
+        findViewById<TextView>(R.id.title).text = "Live TV"
 
         catAdapter = SimpleAdapter(
             R.layout.item_text,
@@ -92,7 +89,7 @@ class LiveActivity : AppCompatActivity() {
                 v.findViewById<TextView>(R.id.num).text = c.num.toString()
                 v.findViewById<TextView>(R.id.name).text = c.name
                 v.findViewById<ImageView>(R.id.logo).loadUrl(c.logo)
-                val badge = (if (c.id in favs) "★" else "") + (if (c.hasArchive) " ⟲" else "")
+                val badge = if (c.id in favs) "★" else ""
                 v.findViewById<TextView>(R.id.badge).text = badge
             },
             onClick = { c, pos -> onChannelClick(c, pos) },
@@ -133,7 +130,7 @@ class LiveActivity : AppCompatActivity() {
         }
     }
 
-    private val screenKey: String get() = if (archiveOnly) Prefs.SCREEN_CATCHUP else Prefs.SCREEN_LIVE
+    private val screenKey: String get() = Prefs.SCREEN_LIVE
 
     override fun onResume() {
         super.onResume()
@@ -144,13 +141,8 @@ class LiveActivity : AppCompatActivity() {
         val list = ArrayList<Category>()
         list.add(Category(Repo.CAT_ALL, "All channels"))
         list.add(Category(Repo.CAT_FAV, "★ Favourites"))
-        if (!archiveOnly) list.add(Category(Repo.CAT_RECENT, "Recently watched"))
-        if (archiveOnly) {
-            val withArchive = Repo.channels.filter { it.hasArchive }.map { it.categoryId }.toSet()
-            list.addAll(Repo.liveCats.filter { it.id in withArchive })
-        } else {
-            list.addAll(Repo.liveCats)
-        }
+        list.add(Category(Repo.CAT_RECENT, "Recently watched"))
+        list.addAll(Repo.liveCats)
         return list
     }
 
@@ -158,7 +150,7 @@ class LiveActivity : AppCompatActivity() {
         currentCat = id
         Prefs.setLastCategory(Repo.profileId, screenKey, id)
         favs = Prefs.favourites(Repo.profileId, Prefs.FAV_LIVE)
-        catChannels = Repo.channelsIn(id, archiveOnly)
+        catChannels = Repo.channelsIn(id)
         applyFilter()
     }
 
@@ -187,10 +179,6 @@ class LiveActivity : AppCompatActivity() {
     }
 
     private fun onChannelClick(c: Channel, pos: Int) {
-        if (archiveOnly) {
-            openGuide(c)
-            return
-        }
         if (!Prefs.previewEnabled || previewId == c.id) {
             playFullscreen(pos)
         } else {
@@ -250,7 +238,7 @@ class LiveActivity : AppCompatActivity() {
         val options = arrayOf(
             "Play full screen",
             if (isFav) "Remove from favourites" else "Add to favourites",
-            if (c.hasArchive) "TV guide & catch-up" else "TV guide"
+            "TV guide"
         )
         AlertDialog.Builder(this)
             .setTitle(c.name)
@@ -285,6 +273,5 @@ class LiveActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val EXTRA_ARCHIVE_ONLY = "archiveOnly"
     }
 }
