@@ -112,6 +112,30 @@ object Repo {
         return "${p.server}/timeshift/${p.username}/${p.password}/$minutes/$start/${c.id}.ts"
     }
 
+    /** Server local time minus UTC, learned from the EPG; null until known. */
+    @Volatile
+    var serverOffsetMs: Long? = null
+
+    /**
+     * Timeshift from an arbitrary moment (live pause / rewind):
+     * /timeshift/user/pass/{minutes}/{yyyy-MM-dd:HH-mm in server time}/{id}.ts
+     */
+    fun timeshiftUrl(c: Channel, startMs: Long, minutes: Int): String {
+        val p = profile ?: return ""
+        val fmt = SimpleDateFormat("yyyy-MM-dd:HH-mm", Locale.US)
+        val offset = serverOffsetMs
+        val start = if (offset != null) {
+            fmt.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            fmt.format(startMs + offset)
+        } else {
+            fmt.format(startMs)
+        }
+        return "${p.server}/timeshift/${p.username}/${p.password}/${minutes.coerceAtLeast(1)}/$start/${c.id}.ts"
+    }
+
+    /** Whether a live channel can be paused and rewound through the provider's archive. */
+    fun canTimeshift(c: Channel?): Boolean = c != null && c.hasArchive && profile?.isXtream == true
+
     // ------------------------------------------------------------------ Auth
 
     /** Checks the credentials. Throws IOException with a readable message on failure. */
@@ -337,6 +361,7 @@ object Repo {
         xmltv = null
         epgCache.clear()
         movieInfoCache.clear()
+        serverOffsetMs = null
         loaded = true
     }
 
@@ -427,6 +452,34 @@ object Repo {
             .filter { it.categoryId !in locked }.take(limit)
     }
 
+    /** One entry per title being watched: a movie, or a series with an episode in progress. */
+    data class Resume(val movie: Movie?, val series: Series?, val key: String)
+
+    /** Movies and series in progress, most recently watched first. */
+    fun continueWatching(limit: Int = 20): List<Resume> {
+        val lockedVod = lockedIds(SECTION_VOD, vodCats)
+        val lockedSeries = lockedIds(SECTION_SERIES, seriesCats)
+        val movieKey = "vod_${profileId}_"
+        val epKey = "ep_${profileId}_"
+        val seenSeries = HashSet<String>()
+        val out = ArrayList<Resume>()
+        for (k in Prefs.resumeIds("")) {
+            if (out.size >= limit) break
+            when {
+                k.startsWith(movieKey) -> movieById[k.removePrefix(movieKey)]
+                    ?.takeIf { it.categoryId !in lockedVod }
+                    ?.let { out.add(Resume(it, null, k)) }
+                k.startsWith(epKey) -> {
+                    val sid = Prefs.episodeSeries(k)
+                    if (sid.isNotEmpty() && seenSeries.add(sid)) {
+                        seriesById[sid]?.takeIf { it.categoryId !in lockedSeries }?.let { out.add(Resume(null, it, k)) }
+                    }
+                }
+            }
+        }
+        return out
+    }
+
     fun recentSeries(limit: Int = 20): List<Series> {
         val locked = lockedIds(SECTION_SERIES, seriesCats)
         return Prefs.recentList("recentSeries_$profileId").mapNotNull { seriesById[it] }
@@ -489,6 +542,15 @@ object Repo {
             if (start == 0L) start = try { fmt.parse(startRaw)?.time ?: 0L } catch (_: Exception) { 0L }
             if (end == 0L) end = try { fmt.parse(o.optString("end", ""))?.time ?: 0L } catch (_: Exception) { 0L }
             if (start == 0L || end == 0L) continue
+            // Learn the server's clock offset (its "start" text vs the real timestamp) for timeshift URLs.
+            if (serverOffsetMs == null && startRaw.length >= 19 && o.optString("start_timestamp", "").isNotEmpty()) {
+                try {
+                    val utc = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                    val asUtc = utc.parse(startRaw)?.time
+                    if (asUtc != null) serverOffsetMs = asUtc - start
+                } catch (_: Exception) {
+                }
+            }
             out.add(
                 Programme(
                     title = b64(o.optString("title", "")),

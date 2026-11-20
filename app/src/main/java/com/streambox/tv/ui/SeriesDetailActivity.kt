@@ -82,6 +82,7 @@ class SeriesDetailActivity : AppCompatActivity() {
             },
             onClick = { _, pos ->
                 val list = episodeAdapter.items
+                list.forEach { Prefs.setEpisodeSeries(key(it), s.id) }
                 Ui.play(this, list.map { PlayItem(key(it), "${s.name} – S${it.season}E${it.num} ${it.title}", it.url, false) }, pos)
             }
         )

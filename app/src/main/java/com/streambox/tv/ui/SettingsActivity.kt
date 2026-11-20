@@ -5,6 +5,7 @@ import android.text.InputType
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.streambox.tv.R
@@ -46,6 +47,9 @@ class SettingsActivity : AppCompatActivity() {
             choose("Live stream format", arrayOf("MPEG-TS (.ts)", "HLS (.m3u8)"), if (Prefs.streamFormat == "ts") 0 else 1) {
                 Prefs.streamFormat = if (it == 0) "ts" else "m3u8"
             }
+        })
+        rows.add(Row("Check for updates", "Installed: build ${com.streambox.tv.data.Updater.currentBuild}. Checked automatically once a day") {
+            com.streambox.tv.data.Updater.check(this, lifecycleScope, quiet = false)
         })
         rows.add(Row("Picture mode", PictureMode.of(Prefs.pictureMode).label) {
             val modes = PictureMode.values()

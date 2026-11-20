@@ -96,6 +96,9 @@
                 android:textColor="@color/gold"
                 android:textSize="13sp" />
 
+            <Button android:id="@+id/tileSearch" style="@style/IconBtn" android:drawableLeft="@drawable/ic_search_nav" />
+            <Button android:id="@+id/tileMulti" style="@style/IconBtn" android:drawableLeft="@drawable/ic_grid_nav" />
+            <Button android:id="@+id/tileRec" style="@style/IconBtn" android:drawableLeft="@drawable/ic_rec_nav" />
             <Button android:id="@+id/tileRefresh" style="@style/IconBtn" android:drawableLeft="@drawable/ic_refresh_nav" />
             <Button android:id="@+id/tileSettings" style="@style/IconBtn" android:drawableLeft="@drawable/ic_settings_nav" />
             <Button android:id="@+id/tileProfiles" style="@style/IconBtn" android:drawableLeft="@drawable/ic_profiles_nav" />

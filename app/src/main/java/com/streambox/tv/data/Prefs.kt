@@ -164,6 +164,32 @@ object Prefs {
         get() = sp.getBoolean("maxQuality", false)
         set(v) = sp.edit().putBoolean("maxQuality", v).apply()
 
+    var remindersJson: String
+        get() = sp.getString("reminders", "[]") ?: "[]"
+        set(v) = sp.edit().putString("reminders", v).apply()
+
+    var recordingsJson: String
+        get() = sp.getString("recordings", "[]") ?: "[]"
+        set(v) = sp.edit().putString("recordings", v).apply()
+
+    /** Sleep timer end time (ms), 0 = off. */
+    var sleepAtMs: Long
+        get() = sp.getLong("sleepAt", 0L)
+        set(v) = sp.edit().putLong("sleepAt", v).apply()
+
+    var autoPip: Boolean
+        get() = sp.getBoolean("autoPip", true)
+        set(v) = sp.edit().putBoolean("autoPip", v).apply()
+
+    /** Index into the recording folders (0 = internal storage, 1+ = USB / SD card). */
+    var recordingStorage: Int
+        get() = sp.getInt("recStorage", 0)
+        set(v) = sp.edit().putInt("recStorage", v).apply()
+
+    var lastUpdateCheck: Long
+        get() = sp.getLong("lastUpdateCheck", 0L)
+        set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()
+
     var openLastProfile: Boolean
         get() = sp.getBoolean("openLastProfile", true)
         set(v) = sp.edit().putBoolean("openLastProfile", v).apply()
@@ -247,6 +273,13 @@ object Prefs {
             .map { it.removePrefix(full) }
     }
 
+    /** Remembers which series an episode resume key belongs to (for the home Continue watching row). */
+    fun setEpisodeSeries(key: String, seriesId: String) {
+        if (sp.getString("epSeries_$key", null) != seriesId) sp.edit().putString("epSeries_$key", seriesId).apply()
+    }
+
+    fun episodeSeries(key: String): String = sp.getString("epSeries_$key", "") ?: ""
+
     // ---------- Generic recent lists ----------
 
     fun recentList(name: String): List<String> {
@@ -257,6 +290,10 @@ object Prefs {
         } catch (_: Exception) {
         }
         return out
+    }
+
+    fun saveRecentList(name: String, ids: List<String>) {
+        sp.edit().putString(name, JSONArray(ids).toString()).apply()
     }
 
     fun pushRecent(name: String, id: String, max: Int = 30) {

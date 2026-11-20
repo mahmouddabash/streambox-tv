@@ -12,6 +12,40 @@
         android:focusable="true"
         app:show_buffering="when_playing" />
 
+    <!-- Channel number being typed on the remote -->
+    <TextView
+        android:id="@+id/number"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="36dp"
+        android:background="@drawable/bg_badge"
+        android:fontFamily="sans-serif-black"
+        android:paddingStart="22dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="22dp"
+        android:paddingBottom="6dp"
+        android:textColor="@color/text"
+        android:textSize="44sp"
+        android:visibility="gone" />
+
+    <!-- Paused / behind live indicator -->
+    <TextView
+        android:id="@+id/shift"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="36dp"
+        android:background="@drawable/bg_badge"
+        android:fontFamily="sans-serif-medium"
+        android:paddingStart="16dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp"
+        android:textColor="@color/gold"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/error"
         android:layout_width="wrap_content"
@@ -96,7 +130,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="▲▼ change channel   ◀▶ audio, subtitles, aspect ratio   OK info"
+            android:text="▲▼ or 0-9 change channel   ⏯ pause / rewind   ◀▶ menu   OK info"
             android:textColor="@color/text_dim"
             android:textSize="12sp" />
     </LinearLayout>

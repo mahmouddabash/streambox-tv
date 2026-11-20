@@ -11,8 +11,10 @@ android {
         applicationId = "com.streambox.tv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // CI build number = version, so the app can tell when a newer release exists.
+        val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionCode = build
+        versionName = "1.0.$build"
     }
 
     // Fixed key committed to the repo so every CI build has the same signature
@@ -35,6 +37,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    buildFeatures {
+        buildConfig = true
     }
     kotlinOptions {
         jvmTarget = "17"

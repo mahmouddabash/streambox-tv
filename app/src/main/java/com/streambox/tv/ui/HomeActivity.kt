@@ -102,6 +102,20 @@ class HomeActivity : AppCompatActivity() {
         val series = findViewById<Button>(R.id.tileSeries)
         val catchup = findViewById<Button>(R.id.tileCatchup)
         val refresh = findViewById<Button>(R.id.tileRefresh)
+        val search = findViewById<Button>(R.id.tileSearch)
+        search.setOnClickListener { if (Repo.loaded) startActivity(Intent(this, SearchActivity::class.java)) }
+        val multi = findViewById<Button>(R.id.tileMulti)
+        multi.setOnClickListener {
+            if (!Repo.loaded || Repo.channels.isEmpty()) return@setOnClickListener
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Multi-screen")
+                .setItems(arrayOf("2 screens", "4 screens")) { _, w ->
+                    startActivity(Intent(this, MultiViewActivity::class.java).putExtra(MultiViewActivity.EXTRA_COUNT, if (w == 0) 2 else 4))
+                }
+                .show()
+        }
+        val rec = findViewById<Button>(R.id.tileRec)
+        rec.setOnClickListener { startActivity(Intent(this, RecordingsActivity::class.java)) }
         val settings = findViewById<Button>(R.id.tileSettings)
         val profiles = findViewById<Button>(R.id.tileProfiles)
         nav = listOf(live, movies, series, catchup)
@@ -122,7 +136,7 @@ class HomeActivity : AppCompatActivity() {
         refresh.setOnClickListener { load(true) }
         settings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         profiles.setOnClickListener { finish() }
-        for ((b, label) in listOf(refresh to "Refresh content", settings to "Settings", profiles to "Switch profile")) {
+        for ((b, label) in listOf(search to "Search", multi to "Multi-screen", rec to "Recordings", refresh to "Refresh content", settings to "Settings", profiles to "Switch profile")) {
             b.contentDescription = label
             b.setOnFocusChangeListener { _, has -> if (has) status.text = label else if (!loading) status.text = "" }
         }
@@ -212,6 +226,7 @@ class HomeActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.accountInfo).text = parts.joinToString("   •   ")
 
         buildRows()
+        com.streambox.tv.data.Updater.checkDaily(this, lifecycleScope)
         val first = rows.firstOrNull()?.cards?.firstOrNull()
         if (first != null) {
             showHero(first, rows[0].title)
@@ -244,8 +259,15 @@ class HomeActivity : AppCompatActivity() {
         fun seriesCard(s: Series) = Card(Kind.SERIES, s.id, s.name, s.poster, rating(s.rating))
         fun channelCard(c: Channel) = Card(Kind.CHANNEL, c.id, c.name, c.logo)
 
-        Repo.continueWatchingMovies().takeIf { it.isNotEmpty() }
-            ?.let { out.add(Row("Continue watching", it.map { m -> movieCard(m, true) })) }
+        Repo.continueWatching().takeIf { it.isNotEmpty() }?.let { list ->
+            out.add(Row("Continue watching", list.map { r ->
+                val pos = Prefs.position(r.key)
+                val dur = Prefs.duration(r.key)
+                val pr = if (dur > 0) (pos * 1000 / dur).toInt().coerceIn(30, 1000) else (pos / 60_000L * 9).toInt().coerceIn(60, 900)
+                if (r.movie != null) Card(Kind.MOVIE, r.movie.id, r.movie.name, r.movie.poster, rating(r.movie.rating), pr)
+                else Card(Kind.SERIES, r.series!!.id, r.series.name, r.series.poster, "", pr)
+            }))
+        }
         Repo.recentChannelList().takeIf { it.isNotEmpty() }
             ?.let { out.add(Row("Recently watched channels", it.map(::channelCard))) }
         Repo.recentlyAddedMovies().takeIf { it.isNotEmpty() }
@@ -381,6 +403,17 @@ class HomeActivity : AppCompatActivity() {
             hide.animate().cancel()
             hide.animate().alpha(0f).setDuration(550).start()
         }
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        // The remote's search / mic key opens search with voice input.
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && Repo.loaded &&
+            (event.keyCode == android.view.KeyEvent.KEYCODE_SEARCH || event.keyCode == android.view.KeyEvent.KEYCODE_VOICE_ASSIST)
+        ) {
+            startActivity(Intent(this, SearchActivity::class.java).putExtra(SearchActivity.EXTRA_VOICE, true))
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     // ------------------------------------------------------------------ Actions

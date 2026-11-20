@@ -1,6 +1,7 @@
 package com.streambox.tv.ui
 
 import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -10,6 +11,8 @@ import com.streambox.tv.R
 import com.streambox.tv.data.Channel
 import com.streambox.tv.data.PlayItem
 import com.streambox.tv.data.Programme
+import com.streambox.tv.data.Recorder
+import com.streambox.tv.data.Reminders
 import com.streambox.tv.data.Repo
 import kotlinx.coroutines.launch
 
@@ -36,11 +39,13 @@ class EpgActivity : AppCompatActivity() {
             R.layout.item_two_line,
             bind = { v, p, _ ->
                 val now = System.currentTimeMillis()
-                val tag = when {
+                var tag = when {
                     p.startMs <= now && p.endMs > now -> "   ● NOW"
                     p.endMs <= now && canCatchUp(p) -> "   ⟲ catch-up"
                     else -> ""
                 }
+                if (p.startMs > now && Reminders.has(channel.id, p.startMs)) tag += "   ⏰"
+                if (isRecording(p)) tag += "   ⏺"
                 v.findViewById<TextView>(R.id.line1).text =
                     "${Ui.day(p.startMs)}  ${Ui.time(p.startMs)} – ${Ui.time(p.endMs)}   ${p.title}$tag"
                 v.findViewById<TextView>(R.id.line2).text = p.desc
@@ -79,8 +84,8 @@ class EpgActivity : AppCompatActivity() {
     private fun onProgramme(p: Programme) {
         val now = System.currentTimeMillis()
         when {
-            p.startMs > now -> toast("This programme has not started yet")
-            p.endMs > now -> Ui.play(this, listOf(PlayItem("", channel.name, Repo.urlFor(channel), true, channel.id)), 0)
+            p.startMs > now -> futureMenu(p)
+            p.endMs > now -> nowMenu(p)
             canCatchUp(p) -> Ui.play(
                 this,
                 listOf(PlayItem("", "${channel.name} – ${p.title}", Repo.catchupUrl(channel, p), false)),
@@ -89,6 +94,45 @@ class EpgActivity : AppCompatActivity() {
             )
             else -> toast("Not available in the catch-up archive")
         }
+    }
+
+    private fun isRecording(p: Programme) = Recorder.all().any {
+        it.channelId == channel.id && it.startMs <= p.startMs + 60_000 && it.endMs >= p.endMs - 60_000 && it.status != Recorder.FAILED
+    }
+
+    private fun refreshList() = adapter.notifyItemRangeChanged(0, adapter.itemCount)
+
+    private fun futureMenu(p: Programme) {
+        val reminded = Reminders.has(channel.id, p.startMs)
+        val options = arrayOf(if (reminded) "⏰  Cancel reminder" else "⏰  Remind me when it starts", "⏺  Record this programme")
+        AlertDialog.Builder(this)
+            .setTitle("${Ui.time(p.startMs)}  ${p.title}")
+            .setItems(options) { _, w ->
+                if (w == 0) {
+                    val on = Reminders.toggle(this, channel, p)
+                    toast(if (on) "I'll remind you at ${Ui.time(p.startMs)}" else "Reminder cancelled")
+                } else {
+                    Recorder.schedule(this, channel, p.title, p.startMs - 60_000L, p.endMs + 2 * 60_000L)
+                    toast("Recording scheduled: ${p.title}")
+                }
+                refreshList()
+            }
+            .show()
+    }
+
+    private fun nowMenu(p: Programme) {
+        val options = arrayOf("▶  Watch live", "⏺  Record until ${Ui.time(p.endMs)}")
+        AlertDialog.Builder(this)
+            .setTitle(p.title)
+            .setItems(options) { _, w ->
+                if (w == 0) Ui.play(this, listOf(PlayItem("", channel.name, Repo.urlFor(channel), true, channel.id)), 0)
+                else {
+                    Recorder.schedule(this, channel, p.title, System.currentTimeMillis(), p.endMs + 2 * 60_000L)
+                    toast("Recording started")
+                    refreshList()
+                }
+            }
+            .show()
     }
 
     companion object {

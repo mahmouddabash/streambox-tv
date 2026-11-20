@@ -7,5 +7,6 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
+        com.streambox.tv.data.Reminders.init(this)
     }
 }

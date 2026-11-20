@@ -1,8 +1,13 @@
 package com.streambox.tv.ui
 
+import android.app.PictureInPictureParams
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
@@ -26,7 +31,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.streambox.tv.R
+import com.streambox.tv.data.Channel
 import com.streambox.tv.data.PlayItem
+import com.streambox.tv.data.Recorder
 import com.streambox.tv.data.Prefs
 import com.streambox.tv.data.Repo
 import com.streambox.tv.data.StreamProbe
@@ -35,7 +42,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Full-screen player.
- * Live: ▲▼ / CH± zap, OK shows info, ◀▶ or MENU opens audio/subtitle/aspect options.
+ * Live: ▲▼ / CH± / digits zap, OK shows info, ⏯ pauses (and rewinds through the archive),
+ * ◀▶ or MENU opens the options (audio, subtitles, record, multi-screen, sleep timer…).
  * VOD: standard transport controls, resume, auto-next episode; MENU opens the same options.
  */
 @OptIn(markerClass = [UnstableApi::class])
@@ -49,6 +57,27 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var ovHint: TextView
     private lateinit var ovProgress: ProgressBar
     private lateinit var errorView: TextView
+    private lateinit var numberView: TextView
+    private lateinit var shiftView: TextView
+
+    // Typing a channel number on the remote
+    private val digits = StringBuilder()
+    private val commitNumber = Runnable { commitDigits() }
+
+    // Previous channel (LAST / "back to previous")
+    private var prevItems: List<PlayItem>? = null
+    private var prevIndex = -1
+
+    // Live pause / rewind: 0 = watching live; otherwise the wall-clock time at position 0 of the timeshift stream.
+    private var shiftStartMs = 0L
+    private var pausedAtMs = 0L
+    private val shiftTicker = object : Runnable {
+        override fun run() {
+            updateShiftBadge()
+            handler.postDelayed(this, 15_000)
+        }
+    }
+    private val sleepRunnable = Runnable { sleepNow() }
 
     private var player: ExoPlayer? = null
     private var items: List<PlayItem> = emptyList()
@@ -102,6 +131,12 @@ class PlayerActivity : AppCompatActivity() {
         ovHint = findViewById(R.id.ovHint)
         ovProgress = findViewById(R.id.ovProgress)
         errorView = findViewById(R.id.error)
+        numberView = findViewById(R.id.number)
+        shiftView = findViewById(R.id.shift)
+
+        // Only one player at a time (a picture-in-picture window is replaced by the new one).
+        active?.get()?.takeIf { it !== this }?.finish()
+        active = java.lang.ref.WeakReference(this)
 
         playerView.setOnClickListener { if (current.isLive) toggleOverlay() }
         playerView.requestFocus()
@@ -112,6 +147,12 @@ class PlayerActivity : AppCompatActivity() {
         if (items.isEmpty()) return
         createPlayer()
         startItem(resume = !fromStart)
+        scheduleSleep()
+    }
+
+    override fun onDestroy() {
+        if (active?.get() === this) active = null
+        super.onDestroy()
     }
 
     private fun createPlayer() {
@@ -159,6 +200,10 @@ class PlayerActivity : AppCompatActivity() {
     private fun startItem(resume: Boolean) {
         val p = player ?: return
         val item = current
+        shiftStartMs = 0L
+        pausedAtMs = 0L
+        handler.removeCallbacks(shiftTicker)
+        shiftView.visibility = View.GONE
         Repo.queueIndex = index
         retries = 0
         token++
@@ -285,8 +330,281 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun zap(delta: Int) {
         if (items.size < 2) return
+        rememberPrevious()
         index = (index + delta + items.size) % items.size
         startItem(resume = false)
+    }
+
+    private fun rememberPrevious() {
+        if (current.isLive) {
+            prevItems = items
+            prevIndex = index
+        }
+    }
+
+    // ------------------------------------------------------------------ Channel numbers & previous channel
+
+    private fun typeDigit(d: Int) {
+        if (digits.length >= 5) digits.setLength(0)
+        digits.append(d)
+        numberView.text = digits.toString()
+        numberView.visibility = View.VISIBLE
+        handler.removeCallbacks(commitNumber)
+        handler.postDelayed(commitNumber, 1600)
+    }
+
+    private fun commitDigits() {
+        val n = digits.toString().toIntOrNull()
+        digits.setLength(0)
+        numberView.visibility = View.GONE
+        if (n == null) return
+        // Prefer the current list, then all channels.
+        val inList = items.indexOfFirst { Repo.channel(it.channelId)?.num == n }
+        if (inList >= 0) {
+            if (inList != index) {
+                rememberPrevious()
+                index = inList
+                startItem(resume = false)
+            }
+            return
+        }
+        val all = Repo.channelsIn(Repo.CAT_ALL)
+        val i = all.indexOfFirst { it.num == n }
+        if (i < 0) {
+            toast("No channel $n")
+            return
+        }
+        rememberPrevious()
+        items = all.map { PlayItem("", it.name, Repo.urlFor(it), true, it.id) }
+        Repo.queue = items
+        index = i
+        startItem(resume = false)
+    }
+
+    private fun previousChannel() {
+        val pi = prevItems
+        if (pi == null || prevIndex !in pi.indices) {
+            toast("No previous channel yet")
+            return
+        }
+        val curItems = items
+        val curIndex = index
+        items = pi
+        Repo.queue = pi
+        index = prevIndex
+        prevItems = curItems
+        prevIndex = curIndex
+        startItem(resume = false)
+    }
+
+    // ------------------------------------------------------------------ Live pause / rewind
+
+    private val liveChannel: Channel? get() = Repo.channel(current.channelId)
+
+    private fun livePosition(): Long {
+        val p = player ?: return System.currentTimeMillis()
+        return if (shiftStartMs > 0) shiftStartMs + p.currentPosition else System.currentTimeMillis()
+    }
+
+    private fun togglePause() {
+        val p = player ?: return
+        if (p.isPlaying || p.playWhenReady) {
+            pausedAtMs = livePosition()
+            p.pause()
+            updateShiftBadge()
+        } else {
+            resumeLive()
+        }
+    }
+
+    private fun resumeLive() {
+        val p = player ?: return
+        val paused = pausedAtMs
+        pausedAtMs = 0L
+        val behind = System.currentTimeMillis() - paused
+        when {
+            shiftStartMs > 0 -> p.play()
+            paused > 0 && behind > 20_000 && Repo.canTimeshift(liveChannel) -> startShift(paused)
+            paused > 0 && behind > 60_000 -> {
+                // No archive: the buffered stream is too old, reconnect to live.
+                toast("This channel has no catch-up archive, back to live")
+                goLive()
+            }
+            else -> p.play()
+        }
+        updateShiftBadge()
+    }
+
+    /** Plays the provider's archive from [fromMs] (wall-clock time). */
+    private fun startShift(fromMs: Long) {
+        val c = liveChannel ?: return
+        if (!Repo.canTimeshift(c)) {
+            toast("Rewind needs a channel with catch-up (⟲)")
+            return
+        }
+        val now = System.currentTimeMillis()
+        val days = if (c.archiveDays > 0) c.archiveDays else 1
+        val earliest = now - days * 86_400_000L
+        val target = fromMs.coerceIn(earliest, now - 30_000L)
+        val start = target - target % 60_000L
+        val minutes = ((now - start) / 60_000L).toInt() + 120
+        shiftStartMs = start
+        startPos = target - start
+        load(Repo.timeshiftUrl(c, start, minutes), null)
+        handler.removeCallbacks(shiftTicker)
+        handler.post(shiftTicker)
+    }
+
+    private fun rewind(minutes: Int) {
+        if (!Repo.canTimeshift(liveChannel)) {
+            toast("Rewind needs a channel with catch-up (⟲)")
+            return
+        }
+        val target = livePosition() - minutes * 60_000L
+        val p = player
+        if (shiftStartMs > 0 && target >= shiftStartMs && p != null) p.seekTo(target - shiftStartMs) else startShift(target)
+        pausedAtMs = 0L
+        updateShiftBadge()
+    }
+
+    private fun forward(minutes: Int) {
+        if (shiftStartMs == 0L) return
+        val target = livePosition() + minutes * 60_000L
+        if (target >= System.currentTimeMillis() - 45_000L) goLive() else player?.seekTo(target - shiftStartMs)
+        updateShiftBadge()
+    }
+
+    /** Watch the current programme from its beginning (needs EPG + archive). */
+    private fun startOver() {
+        val c = liveChannel ?: return
+        lifecycleScope.launch {
+            val now = System.currentTimeMillis()
+            val pr = Repo.upcoming(this@PlayerActivity, c).firstOrNull { it.startMs <= now && it.endMs > now }
+            if (pr == null) toast("No programme information for this channel") else startShift(pr.startMs)
+        }
+    }
+
+    private fun goLive() {
+        shiftStartMs = 0L
+        pausedAtMs = 0L
+        startPos = 0L
+        handler.removeCallbacks(shiftTicker)
+        load(current.url, null)
+        updateShiftBadge()
+    }
+
+    private fun updateShiftBadge() {
+        if (!current.isLive) return
+        val behindMin = ((System.currentTimeMillis() - livePosition()) / 60_000L).toInt()
+        val text = when {
+            pausedAtMs > 0 -> "⏸  Paused" + if (Repo.canTimeshift(liveChannel)) "   •   ⏯ continue from here" else "   •   ⏯ resume"
+            shiftStartMs > 0 -> "⏪  ${if (behindMin < 1) "<1" else behindMin.toString()} min behind live   •   ⏩ catch up   •   menu: Back to live"
+            else -> ""
+        }
+        shiftView.text = text
+        shiftView.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    // ------------------------------------------------------------------ Sleep timer & picture-in-picture
+
+    private fun scheduleSleep() {
+        handler.removeCallbacks(sleepRunnable)
+        val left = Prefs.sleepAtMs - System.currentTimeMillis()
+        if (Prefs.sleepAtMs > 0 && left > 0) handler.postDelayed(sleepRunnable, left)
+        else if (Prefs.sleepAtMs > 0) Prefs.sleepAtMs = 0L
+    }
+
+    private fun sleepNow() {
+        Prefs.sleepAtMs = 0L
+        player?.pause()
+        toast("Sleep timer: playback stopped")
+        finishAffinity()
+    }
+
+    private fun sleepMenu() {
+        val mins = intArrayOf(0, 15, 30, 45, 60, 90, 120)
+        val labels = mins.map { if (it == 0) "Off" else "$it minutes" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Sleep timer")
+            .setItems(labels) { _, w ->
+                Prefs.sleepAtMs = if (mins[w] == 0) 0L else System.currentTimeMillis() + mins[w] * 60_000L
+                scheduleSleep()
+                toast(if (mins[w] == 0) "Sleep timer off" else "Playback stops in ${mins[w]} minutes")
+            }
+            .show()
+    }
+
+    private fun sleepLabel(): String {
+        val left = Prefs.sleepAtMs - System.currentTimeMillis()
+        return if (Prefs.sleepAtMs > 0 && left > 0) "${(left / 60_000L) + 1} min left" else "Off"
+    }
+
+    private val pipSupported: Boolean
+        get() = Build.VERSION.SDK_INT >= 26 && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    private fun enterPip(): Boolean {
+        if (!pipSupported || Build.VERSION.SDK_INT < 26) return false
+        return try {
+            val f = player?.videoFormat
+            val ratio = if (f != null && f.width > 0 && f.height > 0)
+                Rational(f.width, f.height).let { r -> if (r.toFloat() in 0.42f..2.38f) r else Rational(16, 9) }
+            else Rational(16, 9)
+            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(ratio).build())
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Home button while playing: keep watching in a small window.
+        if (Prefs.autoPip && player?.isPlaying == true) enterPip()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPip: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPip, newConfig)
+        if (isInPip) {
+            overlay.visibility = View.GONE
+            numberView.visibility = View.GONE
+            shiftView.visibility = View.GONE
+            playerView.useController = false
+            playerView.hideController()
+        } else {
+            playerView.useController = !current.isLive
+            updateShiftBadge()
+        }
+    }
+
+    // ------------------------------------------------------------------ Record & multi-screen
+
+    private fun recordMenu() {
+        val c = liveChannel ?: return
+        lifecycleScope.launch {
+            val now = System.currentTimeMillis()
+            val pr = if (Repo.hasEpgSource) Repo.upcoming(this@PlayerActivity, c).firstOrNull { it.startMs <= now && it.endMs > now } else null
+            val options = ArrayList<Pair<String, Long>>()
+            if (pr != null) options.add("Record \"${pr.title}\" until ${Ui.time(pr.endMs)}" to pr.endMs + 2 * 60_000L)
+            for (m in intArrayOf(30, 60, 120)) options.add("Record the next $m minutes" to now + m * 60_000L)
+            AlertDialog.Builder(this@PlayerActivity)
+                .setTitle("⏺  Record ${c.name}")
+                .setItems(options.map { it.first }.toTypedArray()) { _, w ->
+                    Recorder.schedule(this@PlayerActivity, c, pr?.title ?: c.name, System.currentTimeMillis(), options[w].second)
+                    toast("Recording to ${Recorder.storageDir(this@PlayerActivity).absolutePath}")
+                }
+                .show()
+        }
+    }
+
+    private fun multiScreen() {
+        AlertDialog.Builder(this)
+            .setTitle("Multi-screen")
+            .setItems(arrayOf("2 screens", "4 screens")) { _, w ->
+                startActivity(Intent(this, MultiViewActivity::class.java)
+                    .putExtra(MultiViewActivity.EXTRA_COUNT, if (w == 0) 2 else 4)
+                    .putExtra(MultiViewActivity.EXTRA_CHANNEL, current.channelId))
+                finish()
+            }
+            .show()
     }
 
     private val listener = object : Player.Listener {
@@ -297,7 +615,9 @@ class PlayerActivity : AppCompatActivity() {
                 errorView.visibility = View.GONE
             } else if (state == Player.STATE_ENDED) {
                 val item = current
-                if (item.isLive) {
+                if (item.isLive && shiftStartMs > 0) {
+                    goLive() // caught up with the end of the archive window
+                } else if (item.isLive) {
                     // A live stream that "ends" has dropped: reconnect.
                     handler.postDelayed(retry, 1500)
                 } else {
@@ -411,6 +731,51 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         if (live) {
+            val digit = when (event.keyCode) {
+                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> event.keyCode - KeyEvent.KEYCODE_0
+                in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> event.keyCode - KeyEvent.KEYCODE_NUMPAD_0
+                else -> -1
+            }
+            if (digit >= 0) {
+                if (down) typeDigit(digit)
+                return true
+            }
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_LAST_CHANNEL -> {
+                    if (down) previousChannel()
+                    return true
+                }
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                    if (down && event.repeatCount == 0) {
+                        val playing = player?.playWhenReady == true
+                        when {
+                            event.keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE && playing -> togglePause()
+                            event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY && !playing -> togglePause()
+                            event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> togglePause()
+                        }
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                    if (down) rewind(1)
+                    return true
+                }
+                KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                    if (down) forward(1)
+                    return true
+                }
+            }
+            if (digits.isNotEmpty() && down && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)) {
+                handler.removeCallbacks(commitNumber)
+                commitDigits()
+                return true
+            }
+            if (pausedAtMs > 0 && down && event.repeatCount == 0 &&
+                (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)
+            ) {
+                resumeLive()
+                return true
+            }
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     if (down) zap(1)
@@ -448,6 +813,20 @@ class PlayerActivity : AppCompatActivity() {
     private fun optionsMenu() {
         val p = player ?: return
         val options = ArrayList<Pair<String, () -> Unit>>()
+        if (current.isLive) {
+            val canShift = Repo.canTimeshift(liveChannel)
+            if (shiftStartMs > 0) options.add("⏩  Back to live" to { goLive() })
+            options.add((if (pausedAtMs > 0) "▶  Resume" else "⏸  Pause live TV") to { togglePause() })
+            if (canShift) {
+                options.add("⏪  Rewind 5 minutes" to { rewind(5) })
+                options.add("⏮  Watch this programme from the start" to { startOver() })
+            }
+            options.add("⏺  Record" to { recordMenu() })
+            prevItems?.getOrNull(prevIndex)?.let { prev -> options.add("↩  Previous channel: ${prev.title}" to { previousChannel() }) }
+            options.add("▦  Multi-screen" to { multiScreen() })
+        }
+        if (pipSupported) options.add("⧉  Picture-in-picture" to { enterPip() })
+        options.add("☾  Sleep timer: ${sleepLabel()}" to { sleepMenu() })
         val mode = PictureMode.of(Prefs.pictureMode)
         val pictureLabel = if (effectsDisabled && mode != PictureMode.OFF) "Not supported on this TV" else mode.label.substringBefore(" (")
         options.add("Picture mode: $pictureLabel" to { pictureMenu() })
@@ -576,5 +955,6 @@ class PlayerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_FROM_START = "fromStart"
+        private var active: java.lang.ref.WeakReference<PlayerActivity>? = null
     }
 }
