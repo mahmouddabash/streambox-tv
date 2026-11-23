@@ -130,8 +130,19 @@ class HomeActivity : AppCompatActivity() {
             else startActivity(Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_SERIES))
         }
         refresh.setOnClickListener { load(true) }
-        settings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
-        profiles.setOnClickListener { finish() }
+        settings.setOnClickListener { Ui.guardKids(this) { startActivity(Intent(this, SettingsActivity::class.java)) } }
+        profiles.setOnClickListener {
+            if (!Repo.loaded) { finish(); return@setOnClickListener }
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(Repo.viewerName)
+                .setItems(arrayOf("👤  Switch viewer", "⇄  Switch provider profile")) { _, w ->
+                    if (w == 0) {
+                        if (Prefs.viewers(Repo.profileId).isEmpty()) toast("Add viewers in Settings → Viewers")
+                        else Ui.chooseViewer(this) { recreate() }
+                    } else Ui.guardKids(this) { finish() }
+                }
+                .show()
+        }
         for ((b, label) in listOf(search to "Search", multi to "Multi-screen", rec to "Recordings", refresh to "Refresh content", settings to "Settings", profiles to "Switch profile")) {
             b.contentDescription = label
             b.setOnFocusChangeListener { _, has -> if (has) status.text = label else if (!loading) status.text = "" }
@@ -155,7 +166,11 @@ class HomeActivity : AppCompatActivity() {
     }
 
     /** First load after launch: jump on to the screen the user left the app from. */
+    /** True while "Who's watching?" is open on start-up: stay on Home instead of jumping to the last screen. */
+    private var askingViewer = false
+
     private fun restoreLastScreen() {
+        if (askingViewer) return
         if (!intent.getBooleanExtra(EXTRA_RESTORE, false)) return
         intent.removeExtra(EXTRA_RESTORE)
         val target = when (Prefs.lastScreen) {
@@ -215,12 +230,19 @@ class HomeActivity : AppCompatActivity() {
         val a = Repo.account
         val parts = ArrayList<String>()
         parts.add(profile.name)
+        if (Prefs.viewers(profile.id).isNotEmpty()) parts.add((if (Repo.kidsMode) "🧒 " else "👤 ") + Repo.viewerName)
         if (a.status.isNotEmpty()) parts.add(a.status)
         if (a.expiryMs > 0) parts.add("Expires ${Ui.date(a.expiryMs)}")
         if (a.maxConnections.isNotEmpty()) parts.add("Connections ${a.activeConnections.ifEmpty { "0" }}/${a.maxConnections}")
         findViewById<TextView>(R.id.accountInfo).text = parts.joinToString("   •   ")
 
         buildRows()
+        // Several viewers: ask who's watching once per app start.
+        if (!viewerAsked && Prefs.viewers(Repo.profileId).isNotEmpty()) {
+            viewerAsked = true
+            askingViewer = true
+            Ui.chooseViewer(this) { recreate() }
+        }
         com.streambox.tv.data.Updater.showWhatsNew(this, lifecycleScope)
         com.streambox.tv.data.Updater.checkDaily(this, lifecycleScope)
         val first = rows.firstOrNull()?.cards?.firstOrNull()
@@ -243,7 +265,7 @@ class HomeActivity : AppCompatActivity() {
         val out = ArrayList<Row>()
         fun movieCard(m: Movie, withProgress: Boolean = false): Card {
             val pr = if (withProgress) {
-                val key = "vod_${Repo.profileId}_${m.id}"
+                val key = "vod_${Repo.userKey}_${m.id}"
                 val pos = Prefs.position(key)
                 val dur = Prefs.duration(key)
                 // Older saves have no length: show a soft indicator that grows with time watched.
@@ -504,6 +526,8 @@ class HomeActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PROFILE = "profile"
+        /** "Who's watching?" is asked once per app start. */
+        private var viewerAsked = false
         const val EXTRA_RESTORE = "restore"
     }
 }

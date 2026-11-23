@@ -381,15 +381,48 @@ object Repo {
         else -> rawLiveCats
     }
 
+    // ------------------------------------------------------------------ Viewers
+
+    /** The person watching; null = main viewer. */
+    @Volatile
+    var viewer: Viewer? = null
+        private set
+
+    /** Key for personal data (favourites, Continue watching, recent): separate for each viewer. */
+    val userKey: String get() = viewer?.let { "$profileId~${it.id}" } ?: profileId
+
+    val kidsMode: Boolean get() = viewer?.kids == true
+
+    val viewerName: String get() = viewer?.name ?: Prefs.mainViewerName
+
+    fun selectViewer(id: String) {
+        Prefs.setCurrentViewer(profileId, id)
+        applyCustomisations()
+    }
+
+    private val KIDS = Regex("(kid|child|cartoon|anim|family|junior|disney|nick|baby|toon|أطفال|اطفال|كرتون|رسوم|عائل)", RegexOption.IGNORE_CASE)
+
+    /** Kids profiles see the categories allowed for them (or child-friendly names when none are chosen), never adult ones. */
+    private fun kidsAllowed(section: String, cat: Category): Boolean {
+        if (ADULT.containsMatchIn(cat.name)) return false
+        val chosen = Prefs.kidsCategories(profileId)
+        return if (chosen.isNotEmpty()) "$section:${cat.id}" in chosen else KIDS.containsMatchIn(cat.name)
+    }
+
+    fun isKidsCategory(section: String, cat: Category) = "$section:${cat.id}" in Prefs.kidsCategories(profileId)
+
     /** Applies the user's channel names, hidden categories and category order. Call after any change. */
     fun applyCustomisations() {
         val pid = profileId
+        val vid = Prefs.currentViewer(pid)
+        viewer = if (vid.isEmpty()) null else Prefs.viewers(pid).firstOrNull { it.id == vid }
         val hidden = Prefs.hiddenCategories(pid)
         fun arrange(section: String, list: List<Category>): List<Category> {
             val order = Prefs.categoryOrder(pid, section)
             val byId = list.associateBy { it.id }
             val ordered = order.mapNotNull { byId[it] } + list.filter { it.id !in order }
-            return ordered.filter { "$section:${it.id}" !in hidden }
+            val shown = ordered.filter { "$section:${it.id}" !in hidden }
+            return if (kidsMode) shown.filter { kidsAllowed(section, it) } else shown
         }
         liveCats = arrange(SECTION_LIVE, rawLiveCats)
         vodCats = arrange(SECTION_VOD, rawVodCats)
@@ -401,7 +434,9 @@ object Repo {
 
     private fun hiddenCatIds(section: String): Set<String> {
         val prefix = "$section:"
-        return Prefs.hiddenCategories(profileId).filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet()
+        val hidden = Prefs.hiddenCategories(profileId).filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toMutableSet()
+        if (kidsMode) allCategories(section).filterNot { kidsAllowed(section, it) }.mapTo(hidden) { it.id }
+        return hidden
     }
 
     /** Moves a category one place up (-1) or down (+1) in its section. */
@@ -449,10 +484,10 @@ object Repo {
         val base: List<Channel> = when (catId) {
             CAT_ALL -> channels.filter { it.categoryId !in locked }
             CAT_FAV -> {
-                val fav = Prefs.favourites(profileId, Prefs.FAV_LIVE)
+                val fav = Prefs.favourites(userKey, Prefs.FAV_LIVE)
                 channels.filter { it.id in fav && it.categoryId !in locked }
             }
-            CAT_RECENT -> Prefs.recentChannels(profileId).mapNotNull { channelById[it] }.filter { it.categoryId !in locked }
+            CAT_RECENT -> Prefs.recentChannels(userKey).mapNotNull { channelById[it] }.filter { it.categoryId !in locked }
             else -> channels.filter { it.categoryId == catId }
         }
         var out = if (hiddenCh.isEmpty()) base else base.filter { it.id !in hiddenCh }
@@ -470,7 +505,7 @@ object Repo {
         return when (catId) {
             CAT_ALL -> movies.filter { it.categoryId !in locked }
             CAT_FAV -> {
-                val fav = Prefs.favourites(profileId, Prefs.FAV_VOD)
+                val fav = Prefs.favourites(userKey, Prefs.FAV_VOD)
                 movies.filter { it.id in fav && it.categoryId !in locked }
             }
             CAT_CONTINUE -> continueWatching(200).mapNotNull { it.movie }
@@ -483,7 +518,7 @@ object Repo {
         return when (catId) {
             CAT_ALL -> series.filter { it.categoryId !in locked }
             CAT_FAV -> {
-                val fav = Prefs.favourites(profileId, Prefs.FAV_SERIES)
+                val fav = Prefs.favourites(userKey, Prefs.FAV_SERIES)
                 series.filter { it.id in fav && it.categoryId !in locked }
             }
             CAT_CONTINUE -> continueWatching(200).mapNotNull { it.series }
@@ -509,7 +544,7 @@ object Repo {
     /** Movies with a saved resume position, most recently watched first. */
     fun continueWatchingMovies(limit: Int = 20): List<Movie> {
         val locked = lockedIds(SECTION_VOD, vodCats)
-        return Prefs.resumeIds("vod_${profileId}_").mapNotNull { movieById[it] }
+        return Prefs.resumeIds("vod_${userKey}_").mapNotNull { movieById[it] }
             .filter { it.categoryId !in locked }.take(limit)
     }
 
@@ -520,8 +555,8 @@ object Repo {
     fun continueWatching(limit: Int = 20): List<Resume> {
         val lockedVod = lockedIds(SECTION_VOD, vodCats)
         val lockedSeries = lockedIds(SECTION_SERIES, seriesCats)
-        val movieKey = "vod_${profileId}_"
-        val epKey = "ep_${profileId}_"
+        val movieKey = "vod_${userKey}_"
+        val epKey = "ep_${userKey}_"
         val seenSeries = HashSet<String>()
         val out = ArrayList<Resume>()
         for (k in Prefs.resumeIds("")) {
@@ -543,9 +578,9 @@ object Repo {
 
     /** "Remove from Continue watching": forgets the saved position (all episodes, for a series). */
     fun forgetProgress(movie: Movie?, series: Series?) {
-        if (movie != null) Prefs.setPosition("vod_${profileId}_${movie.id}", 0L)
+        if (movie != null) Prefs.setPosition("vod_${userKey}_${movie.id}", 0L)
         if (series != null) {
-            for (k in Prefs.resumeIds("ep_${profileId}_").map { "ep_${profileId}_$it" }) {
+            for (k in Prefs.resumeIds("ep_${userKey}_").map { "ep_${userKey}_$it" }) {
                 if (Prefs.episodeSeries(k) == series.id) Prefs.setPosition(k, 0L)
             }
         }
@@ -553,7 +588,7 @@ object Repo {
 
     fun recentSeries(limit: Int = 20): List<Series> {
         val locked = lockedIds(SECTION_SERIES, seriesCats)
-        return Prefs.recentList("recentSeries_$profileId").mapNotNull { seriesById[it] }
+        return Prefs.recentList("recentSeries_$userKey").mapNotNull { seriesById[it] }
             .filter { it.categoryId !in locked }.take(limit)
     }
 

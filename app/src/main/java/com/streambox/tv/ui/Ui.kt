@@ -176,11 +176,42 @@ object Ui {
     }
 
     /** Long-press menu on a category: lock / unlock it. */
+    // ------------------------------------------------------------------ Viewers
+
+    /** Runs [action] directly, or after the PIN when a Kids profile is active. */
+    fun guardKids(activity: Activity, action: () -> Unit) {
+        if (Repo.kidsMode) askPin(activity, action) else action()
+    }
+
+    /** "Who's watching?": picks the viewer, then calls [onChanged] if it changed. */
+    fun chooseViewer(activity: Activity, onChanged: () -> Unit) {
+        val viewers = Prefs.viewers(Repo.profileId)
+        val ids = listOf("") + viewers.map { it.id }
+        val names = listOf("👤  ${Prefs.mainViewerName}") + viewers.map { (if (it.kids) "🧒  " else "👤  ") + it.name }
+        val current = ids.indexOf(Prefs.currentViewer(Repo.profileId)).coerceAtLeast(0)
+        AlertDialog.Builder(activity)
+            .setTitle("Who's watching?")
+            .setSingleChoiceItems(names.toTypedArray(), current) { d, w ->
+                d.dismiss()
+                if (w == current) return@setSingleChoiceItems
+                val switch = {
+                    Repo.selectViewer(ids[w])
+                    onChanged()
+                }
+                // Leaving a Kids profile needs the PIN.
+                if (Repo.kidsMode) askPin(activity, switch) else switch()
+            }
+            .show()
+    }
+
     /** Long-press on a category: move it, hide it, or lock it with the PIN. */
     fun categoryMenu(activity: Activity, section: String, cat: Category, onChanged: () -> Unit) {
         if (cat.id.startsWith("__")) return
+        if (Repo.kidsMode) return
+        val kids = Repo.isKidsCategory(section, cat)
         val options = arrayOf("▲  Move up", "▼  Move down", "Hide this category",
-            if (Repo.isUserLocked(section, cat)) "Unlock this category" else "Lock this category with PIN")
+            if (Repo.isUserLocked(section, cat)) "Unlock this category" else "Lock this category with PIN",
+            if (kids) "🧒  Remove from Kids profiles" else "🧒  Show in Kids profiles")
         AlertDialog.Builder(activity)
             .setTitle(cat.name)
             .setItems(options) { _, w ->
@@ -193,7 +224,13 @@ object Ui {
                         activity.toast("Hidden. Show it again in Settings → Channel manager")
                         onChanged()
                     }
-                    else -> categoryLockMenu(activity, section, cat, onChanged)
+                    3 -> categoryLockMenu(activity, section, cat, onChanged)
+                    else -> {
+                        Prefs.setKidsCategory(Repo.profileId, "$section:${cat.id}", !kids)
+                        Repo.applyCustomisations()
+                        activity.toast(if (kids) "Removed from Kids profiles" else "Kids profiles can now see ${cat.name}")
+                        onChanged()
+                    }
                 }
             }
             .show()

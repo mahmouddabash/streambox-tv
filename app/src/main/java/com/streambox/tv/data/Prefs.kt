@@ -317,6 +317,42 @@ object Prefs {
         e.apply()
     }
 
+    // ---------- Viewers (per provider profile) ----------
+
+    fun viewers(pid: String): List<Viewer> {
+        val out = ArrayList<Viewer>()
+        try {
+            val arr = JSONArray(sp.getString("viewers_$pid", "[]"))
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                out.add(Viewer(o.getString("id"), o.optString("name"), o.optBoolean("kids")))
+            }
+        } catch (_: Exception) {
+        }
+        return out
+    }
+
+    fun saveViewers(pid: String, list: List<Viewer>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("kids", it.kids)) }
+        sp.edit().putString("viewers_$pid", arr.toString()).apply()
+    }
+
+    fun currentViewer(pid: String): String = sp.getString("viewer_$pid", "") ?: ""
+    fun setCurrentViewer(pid: String, id: String) = sp.edit().putString("viewer_$pid", id).apply()
+
+    var mainViewerName: String
+        get() = sp.getString("mainViewer", "Me") ?: "Me"
+        set(v) = sp.edit().putString("mainViewer", v.ifBlank { "Me" }).apply()
+
+    /** Categories ("section:id") the user allowed in Kids profiles. */
+    fun kidsCategories(pid: String): Set<String> = sp.getStringSet("kidsCat_$pid", emptySet()) ?: emptySet()
+    fun setKidsCategory(pid: String, key: String, allowed: Boolean) {
+        val s = HashSet(kidsCategories(pid))
+        if (allowed) s.add(key) else s.remove(key)
+        sp.edit().putStringSet("kidsCat_$pid", s).apply()
+    }
+
     var lastUpdateCheck: Long
         get() = sp.getLong("lastUpdateCheck", 0L)
         set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()

@@ -19,7 +19,7 @@ class MovieDetailActivity : AppCompatActivity() {
     private lateinit var movie: Movie
     private lateinit var btnResume: Button
     private lateinit var btnFav: Button
-    private val key: String get() = "vod_${Repo.profileId}_${movie.id}"
+    private val key: String get() = "vod_${Repo.userKey}_${movie.id}"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,7 +45,7 @@ class MovieDetailActivity : AppCompatActivity() {
         btnPlay.setOnClickListener { play(fromStart = true) }
         btnResume.setOnClickListener { play(fromStart = false) }
         btnFav.setOnClickListener {
-            Prefs.toggleFavourite(Repo.profileId, Prefs.FAV_VOD, m.id)
+            Prefs.toggleFavourite(Repo.userKey, Prefs.FAV_VOD, m.id)
             updateFav()
         }
         updateFav()
@@ -115,7 +115,7 @@ class MovieDetailActivity : AppCompatActivity() {
     }
 
     private fun updateFav() {
-        btnFav.text = if (Prefs.isFavourite(Repo.profileId, Prefs.FAV_VOD, movie.id)) "✓  In my list" else "+  My list"
+        btnFav.text = if (Prefs.isFavourite(Repo.userKey, Prefs.FAV_VOD, movie.id)) "✓  In my list" else "+  My list"
     }
 
     private fun play(fromStart: Boolean) {

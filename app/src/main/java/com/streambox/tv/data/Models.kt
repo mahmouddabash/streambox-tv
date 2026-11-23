@@ -27,6 +27,9 @@ data class AccountInfo(
 
 data class Category(val id: String, val name: String)
 
+/** A person watching under one provider login ("Who's watching?"). The main viewer has id "". */
+data class Viewer(val id: String, val name: String, val kids: Boolean)
+
 data class Channel(
     val id: String,
     val num: Int,

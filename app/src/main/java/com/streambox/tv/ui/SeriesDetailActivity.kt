@@ -26,12 +26,12 @@ class SeriesDetailActivity : AppCompatActivity() {
     private lateinit var episodeAdapter: SimpleAdapter<Episode>
     private var seasons: Map<Int, List<Episode>> = emptyMap()
 
-    private fun key(e: Episode) = "ep_${Repo.profileId}_${e.id}"
+    private fun key(e: Episode) = "ep_${Repo.userKey}_${e.id}"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val s = Repo.seriesItem(intent.getStringExtra(EXTRA_ID) ?: "")
-        if (s != null) Prefs.pushRecent("recentSeries_${Repo.profileId}", s.id)
+        if (s != null) Prefs.pushRecent("recentSeries_${Repo.userKey}", s.id)
         if (s == null) {
             finish()
             return
@@ -75,7 +75,7 @@ class SeriesDetailActivity : AppCompatActivity() {
         }
 
         btnFav.setOnClickListener {
-            Prefs.toggleFavourite(Repo.profileId, Prefs.FAV_SERIES, s.id)
+            Prefs.toggleFavourite(Repo.userKey, Prefs.FAV_SERIES, s.id)
             updateFav()
         }
         updateFav()
@@ -139,7 +139,7 @@ class SeriesDetailActivity : AppCompatActivity() {
     }
 
     private fun updateFav() {
-        btnFav.text = if (Prefs.isFavourite(Repo.profileId, Prefs.FAV_SERIES, show.id)) "✓  In my list" else "+  My list"
+        btnFav.text = if (Prefs.isFavourite(Repo.userKey, Prefs.FAV_SERIES, show.id)) "✓  In my list" else "+  My list"
     }
 
     companion object {

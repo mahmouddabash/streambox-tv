@@ -149,7 +149,7 @@ class LiveActivity : AppCompatActivity() {
     private fun showCategory(id: String) {
         currentCat = id
         Prefs.setLastCategory(Repo.profileId, screenKey, id)
-        favs = Prefs.favourites(Repo.profileId, Prefs.FAV_LIVE)
+        favs = Prefs.favourites(Repo.userKey, Prefs.FAV_LIVE)
         catChannels = Repo.channelsIn(id)
         applyFilter()
     }
@@ -159,7 +159,7 @@ class LiveActivity : AppCompatActivity() {
      * Returns false when that channel is not in the current list.
      */
     private fun preselectLast(): Boolean {
-        val lastId = Prefs.recentChannels(Repo.profileId).firstOrNull() ?: return false
+        val lastId = Prefs.recentChannels(Repo.userKey).firstOrNull() ?: return false
         val idx = chAdapter.items.indexOfFirst { it.id == lastId }
         if (idx < 0) return false
         chAdapter.select(idx)
@@ -234,7 +234,7 @@ class LiveActivity : AppCompatActivity() {
     }
 
     private fun channelMenu(c: Channel, pos: Int) {
-        val isFav = Prefs.isFavourite(Repo.profileId, Prefs.FAV_LIVE, c.id)
+        val isFav = Prefs.isFavourite(Repo.userKey, Prefs.FAV_LIVE, c.id)
         val options = arrayOf(
             "Play full screen",
             if (isFav) "Remove from favourites" else "Add to favourites",
@@ -248,8 +248,8 @@ class LiveActivity : AppCompatActivity() {
                 when (which) {
                     0 -> playFullscreen(pos)
                     1 -> {
-                        Prefs.toggleFavourite(Repo.profileId, Prefs.FAV_LIVE, c.id)
-                        favs = Prefs.favourites(Repo.profileId, Prefs.FAV_LIVE)
+                        Prefs.toggleFavourite(Repo.userKey, Prefs.FAV_LIVE, c.id)
+                        favs = Prefs.favourites(Repo.userKey, Prefs.FAV_LIVE)
                         if (currentCat == Repo.CAT_FAV) showCategory(currentCat) else chAdapter.refresh(pos)
                     }
                     2 -> openGuide(c)

@@ -126,6 +126,8 @@ class SettingsActivity : AppCompatActivity() {
         })
         fun langName(code: String, none: String) =
             PlayerFactory.LANGUAGES.firstOrNull { it.first == code }?.second ?: none
+        rows.add(Row("Viewers", (listOf(Prefs.mainViewerName) + Prefs.viewers(Repo.profileId).map { (if (it.kids) "🧒 " else "") + it.name })
+            .joinToString(", ") + "   •   separate favourites and Continue watching, Kids profiles") { viewersMenu() })
         rows.add(Row("Channel manager", "Sort channels, show hidden channels and categories, undo renames") { channelManager() })
         rows.add(Row("Audio language", langName(Prefs.audioLanguage, "Stream default") + "   •   chosen automatically on every channel and movie") {
             val opts = listOf("" to "Stream default") + PlayerFactory.LANGUAGES
@@ -207,6 +209,61 @@ class SettingsActivity : AppCompatActivity() {
                 onPick(which)
                 d.dismiss()
                 refresh()
+            }
+            .show()
+    }
+
+    private fun viewersMenu() {
+        if (!Repo.loaded) {
+            toast("Open a profile first")
+            return
+        }
+        val pid = Repo.profileId
+        val list = Prefs.viewers(pid)
+        val names = listOf("👤  ${Prefs.mainViewerName}  (main)") + list.map { (if (it.kids) "🧒  " else "👤  ") + it.name } + listOf("+  Add viewer", "+  Add Kids viewer")
+        AlertDialog.Builder(this)
+            .setTitle("Viewers")
+            .setItems(names.toTypedArray()) { _, w ->
+                when {
+                    w == 0 -> Ui.input(this, "Your name", Prefs.mainViewerName) { Prefs.mainViewerName = it; refresh() }
+                    w <= list.size -> editViewer(list[w - 1])
+                    else -> {
+                        val kids = w == list.size + 2
+                        Ui.input(this, if (kids) "Kids viewer name" else "Viewer name", "") { name ->
+                            if (name.isBlank()) return@input
+                            Prefs.saveViewers(pid, list + com.streambox.tv.data.Viewer("v${System.currentTimeMillis()}", name, kids))
+                            if (kids && !Prefs.parentalEnabled) toast("Tip: set a parental PIN so kids can't leave their profile")
+                            refresh()
+                        }
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun editViewer(v: com.streambox.tv.data.Viewer) {
+        val pid = Repo.profileId
+        val opts = arrayOf("Rename", if (v.kids) "Make a normal viewer" else "Make a Kids viewer", "Delete")
+        AlertDialog.Builder(this)
+            .setTitle(v.name)
+            .setItems(opts) { _, w ->
+                val list = Prefs.viewers(pid)
+                when (w) {
+                    0 -> Ui.input(this, "Viewer name", v.name) { name ->
+                        Prefs.saveViewers(pid, list.map { if (it.id == v.id) it.copy(name = name.ifBlank { it.name }) else it })
+                        refresh()
+                    }
+                    1 -> {
+                        Prefs.saveViewers(pid, list.map { if (it.id == v.id) it.copy(kids = !it.kids) else it })
+                        Repo.applyCustomisations()
+                        refresh()
+                    }
+                    else -> {
+                        Prefs.saveViewers(pid, list.filterNot { it.id == v.id })
+                        if (Prefs.currentViewer(pid) == v.id) Repo.selectViewer("")
+                        refresh()
+                    }
+                }
             }
             .show()
     }

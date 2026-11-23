@@ -87,8 +87,8 @@ class BrowseActivity : AppCompatActivity() {
                         }
                         .show()
                 } else {
-                    val now = Prefs.toggleFavourite(Repo.profileId, favType, c.id)
-                    favs = Prefs.favourites(Repo.profileId, favType)
+                    val now = Prefs.toggleFavourite(Repo.userKey, favType, c.id)
+                    favs = Prefs.favourites(Repo.userKey, favType)
                     toast(if (now) "Added to favourites" else "Removed from favourites")
                     if (currentCat == Repo.CAT_FAV) showCategory(currentCat) else gridAdapter.refresh(pos)
                 }
@@ -144,7 +144,7 @@ class BrowseActivity : AppCompatActivity() {
     private fun showCategory(id: String) {
         currentCat = id
         Prefs.setLastCategory(Repo.profileId, section, id)
-        favs = Prefs.favourites(Repo.profileId, favType)
+        favs = Prefs.favourites(Repo.userKey, favType)
         cards = if (section == Repo.SECTION_VOD) {
             Repo.moviesIn(id).map { Card(it.id, it.name, it.poster, it.rating) }
         } else {

@@ -266,7 +266,7 @@ class PlayerActivity : AppCompatActivity() {
         startPos = if (resume && !item.isLive) Prefs.position(item.key) else 0L
         load(item.url, null)
 
-        if (item.isLive && item.channelId.isNotEmpty()) Prefs.addRecentChannel(Repo.profileId, item.channelId)
+        if (item.isLive && item.channelId.isNotEmpty()) Prefs.addRecentChannel(Repo.userKey, item.channelId)
         showOverlay()
     }
 
