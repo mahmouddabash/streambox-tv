@@ -406,7 +406,10 @@ object Repo {
     private fun kidsAllowed(section: String, cat: Category): Boolean {
         if (ADULT.containsMatchIn(cat.name)) return false
         val chosen = Prefs.kidsCategories(profileId)
-        return if (chosen.isNotEmpty()) "$section:${cat.id}" in chosen else KIDS.containsMatchIn(cat.name)
+        if (chosen.isNotEmpty()) return "$section:${cat.id}" in chosen
+        // No choices made: child-friendly names, or (if the provider has none) everything except adult.
+        val anyKids = allCategories(section).any { KIDS.containsMatchIn(it.name) }
+        return !anyKids || KIDS.containsMatchIn(cat.name)
     }
 
     fun isKidsCategory(section: String, cat: Category) = "$section:${cat.id}" in Prefs.kidsCategories(profileId)
