@@ -295,6 +295,7 @@ object Tr {
         "⏺  Record" to "⏺  تسجيل",
         "⏺  Record this programme" to "⏺  تسجيل هذا البرنامج",
         "▦  Multi-screen" to "▦  تعدّد الشاشات",
+        "◀ ▶  one minute back / forward" to "◀ ▶  دقيقة للخلف / للأمام",
         "▲▼ or 0-9 change channel   ⏯ pause / rewind   ◀▶ menu   OK info" to "▲▼ أو 0-9 لتغيير القناة   ⏯ إيقاف/إرجاع   ◀▶ القائمة   OK معلومات",
         "▶  Play" to "▶  تشغيل",
         "▶  Resume" to "▶  استئناف",

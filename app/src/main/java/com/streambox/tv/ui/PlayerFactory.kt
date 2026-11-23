@@ -42,21 +42,33 @@ object PlayerFactory {
             .build()
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 50_000,
+                /* minBufferMs = */ 30_000,
+                /* maxBufferMs = */ 60_000,
                 /* bufferForPlaybackMs = */ 1_000,
-                /* bufferForPlaybackAfterRebufferMs = */ 2_000
+                /* bufferForPlaybackAfterRebufferMs = */ 1_500
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
-        return ExoPlayer.Builder(context, renderers)
+        // Seeking inside .ts files (and other streams without an index) uses the bitrate instead of failing.
+        val extractors = androidx.media3.extractor.DefaultExtractorsFactory()
+            .setConstantBitrateSeekingEnabled(true)
+            .setConstantBitrateSeekingAlwaysEnabled(true)
+        val player = ExoPlayer.Builder(context, renderers)
             .setLoadControl(loadControl)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSource))
+            .setSeekBackIncrementMs(SEEK_STEP_MS)
+            .setSeekForwardIncrementMs(SEEK_STEP_MS)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource, extractors))
             .setTrackSelector(selector)
             .setBandwidthMeter(bandwidth)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
             .build()
+        // Jump to the nearest key frame: seeks finish much faster than frame-exact ones.
+        player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+        return player
     }
+
+    /** ◀ ▶ / ⏪ ⏩ step for movies and episodes. */
+    const val SEEK_STEP_MS = 60_000L
 
     /** Applies the subtitle size, colour and background chosen in Settings. */
     fun styleSubtitles(view: androidx.media3.ui.PlayerView) {

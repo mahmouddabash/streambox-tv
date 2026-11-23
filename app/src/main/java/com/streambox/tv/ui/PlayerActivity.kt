@@ -78,6 +78,11 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
     private val sleepRunnable = Runnable { sleepNow() }
+
+    // Movies/episodes: ◀ ▶ add up whole minutes, then one seek is made (no re-buffer per key press).
+    private var pendingSeekMs = 0L
+    private val applySeek = Runnable { commitSeek() }
+    private val hideSeek = Runnable { shiftView.visibility = View.GONE }
     /** Set when we open another screen ourselves, so that doesn't trigger picture-in-picture. */
     private var leavingInternally = false
     private var wasInPip = false
@@ -135,6 +140,8 @@ class PlayerActivity : AppCompatActivity() {
         ovProgress = findViewById(R.id.ovProgress)
         errorView = findViewById(R.id.error)
         numberView = findViewById(R.id.number)
+        playerView.findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+            ?.setKeyTimeIncrement(PlayerFactory.SEEK_STEP_MS)
         shiftView = findViewById(R.id.shift)
 
         // Only one player at a time (a picture-in-picture window is replaced by the new one).
@@ -821,11 +828,55 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 }
             }
+        } else if (!playerView.isControllerFullyVisible && (
+                event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                    event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND || event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD)
+        ) {
+            // ◀ / ⏪ = back one minute, ▶ / ⏩ = forward one minute (holding the key keeps stepping).
+            if (down) {
+                val back = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
+                if (event.repeatCount == 0 || event.repeatCount % 3 == 0) stepSeek(if (back) -1 else 1)
+            }
+            return true
         } else if (event.keyCode == KeyEvent.KEYCODE_BACK && playerView.isControllerFullyVisible) {
             if (event.action == KeyEvent.ACTION_UP) playerView.hideController()
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    // ------------------------------------------------------------------ Minute seeking (movies & episodes)
+
+    private fun stepSeek(minutes: Int) {
+        val p = player ?: return
+        val dur = p.duration
+        val base = p.currentPosition
+        var target = base + pendingSeekMs + minutes * PlayerFactory.SEEK_STEP_MS
+        if (target < 0) target = 0
+        if (dur != C.TIME_UNSET && dur > 0 && target > dur - 5_000) target = (dur - 5_000).coerceAtLeast(0)
+        pendingSeekMs = target - base
+        val stepMin = Math.round(pendingSeekMs / 60_000.0).toInt()
+        val sign = if (stepMin > 0) "+" else if (stepMin < 0) "−" else "±"
+        val arrow = if (pendingSeekMs < 0) "⏪" else "⏩"
+        shiftView.text = "$arrow  $sign${kotlin.math.abs(stepMin)} min   →   ${clock(target)}" +
+            if (dur != C.TIME_UNSET && dur > 0) "  /  ${clock(dur)}" else ""
+        shiftView.visibility = View.VISIBLE
+        handler.removeCallbacks(hideSeek)
+        handler.removeCallbacks(applySeek)
+        handler.postDelayed(applySeek, 650)
+    }
+
+    private fun commitSeek() {
+        val p = player ?: return
+        if (pendingSeekMs != 0L) p.seekTo((p.currentPosition + pendingSeekMs).coerceAtLeast(0))
+        pendingSeekMs = 0L
+        handler.postDelayed(hideSeek, 1500)
+    }
+
+    private fun clock(ms: Long): String {
+        val s = ms / 1000
+        return if (s >= 3600) String.format(java.util.Locale.US, "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)
+        else String.format(java.util.Locale.US, "%d:%02d", s / 60, s % 60)
     }
 
     // ------------------------------------------------------------------ Options
