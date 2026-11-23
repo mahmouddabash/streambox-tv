@@ -76,10 +76,22 @@ class BrowseActivity : AppCompatActivity() {
             },
             onClick = { c, _ -> open(c) },
             onLongClick = { c, pos ->
-                val now = Prefs.toggleFavourite(Repo.profileId, favType, c.id)
-                favs = Prefs.favourites(Repo.profileId, favType)
-                toast(if (now) "Added to favourites" else "Removed from favourites")
-                if (currentCat == Repo.CAT_FAV) showCategory(currentCat) else gridAdapter.refresh(pos)
+                if (currentCat == Repo.CAT_CONTINUE) {
+                    // In Continue watching, long-press offers to drop the title from the list.
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle(c.name)
+                        .setItems(arrayOf("Remove from Continue watching")) { _, _ ->
+                            if (section == Repo.SECTION_VOD) Repo.forgetProgress(Repo.movie(c.id), null)
+                            else Repo.forgetProgress(null, Repo.seriesItem(c.id))
+                            showCategory(currentCat)
+                        }
+                        .show()
+                } else {
+                    val now = Prefs.toggleFavourite(Repo.profileId, favType, c.id)
+                    favs = Prefs.favourites(Repo.profileId, favType)
+                    toast(if (now) "Added to favourites" else "Removed from favourites")
+                    if (currentCat == Repo.CAT_FAV) showCategory(currentCat) else gridAdapter.refresh(pos)
+                }
                 true
             }
         )
@@ -123,6 +135,7 @@ class BrowseActivity : AppCompatActivity() {
     private fun categories(): List<Category> {
         val list = ArrayList<Category>()
         list.add(Category(Repo.CAT_ALL, if (section == Repo.SECTION_VOD) "All movies" else "All series"))
+        list.add(Category(Repo.CAT_CONTINUE, "▶ Continue watching"))
         list.add(Category(Repo.CAT_FAV, "★ Favourites"))
         list.addAll(if (section == Repo.SECTION_VOD) Repo.vodCats else Repo.seriesCats)
         return list
@@ -158,7 +171,8 @@ class BrowseActivity : AppCompatActivity() {
 
     override fun onRestart() {
         super.onRestart()
-        if (::gridAdapter.isInitialized && currentCat == Repo.CAT_FAV) showCategory(currentCat)
+        // Favourites and Continue watching may have changed while a title was open.
+        if (::gridAdapter.isInitialized && (currentCat == Repo.CAT_FAV || currentCat == Repo.CAT_CONTINUE)) showCategory(currentCat)
     }
 
     companion object {

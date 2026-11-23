@@ -21,6 +21,7 @@ object Repo {
     const val CAT_ALL = "__all"
     const val CAT_FAV = "__fav"
     const val CAT_RECENT = "__recent"
+    const val CAT_CONTINUE = "__continue"
 
     const val SECTION_LIVE = "live"
     const val SECTION_VOD = "vod"
@@ -414,6 +415,7 @@ object Repo {
                 val fav = Prefs.favourites(profileId, Prefs.FAV_VOD)
                 movies.filter { it.id in fav && it.categoryId !in locked }
             }
+            CAT_CONTINUE -> continueWatching(200).mapNotNull { it.movie }
             else -> movies.filter { it.categoryId == catId }
         }
     }
@@ -426,6 +428,7 @@ object Repo {
                 val fav = Prefs.favourites(profileId, Prefs.FAV_SERIES)
                 series.filter { it.id in fav && it.categoryId !in locked }
             }
+            CAT_CONTINUE -> continueWatching(200).mapNotNull { it.series }
             else -> series.filter { it.categoryId == catId }
         }
     }
@@ -478,6 +481,16 @@ object Repo {
             }
         }
         return out
+    }
+
+    /** "Remove from Continue watching": forgets the saved position (all episodes, for a series). */
+    fun forgetProgress(movie: Movie?, series: Series?) {
+        if (movie != null) Prefs.setPosition("vod_${profileId}_${movie.id}", 0L)
+        if (series != null) {
+            for (k in Prefs.resumeIds("ep_${profileId}_").map { "ep_${profileId}_$it" }) {
+                if (Prefs.episodeSeries(k) == series.id) Prefs.setPosition(k, 0L)
+            }
+        }
     }
 
     fun recentSeries(limit: Int = 20): List<Series> {

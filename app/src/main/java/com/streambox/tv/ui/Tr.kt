@@ -50,6 +50,8 @@ object Tr {
         "Built-in player" to "المشغّل المدمج",
         "Cache cleared" to "تم مسح الذاكرة المؤقتة",
         "Cancel" to "إلغاء",
+        "▶ Continue watching" to "▶ متابعة المشاهدة",
+        "Remove from Continue watching" to "إزالة من متابعة المشاهدة",
         "Install with Downloader" to "التثبيت عبر Downloader",
         "Open Downloader" to "فتح Downloader",
         "Downloader isn't installed" to "تطبيق Downloader غير مثبّت",
