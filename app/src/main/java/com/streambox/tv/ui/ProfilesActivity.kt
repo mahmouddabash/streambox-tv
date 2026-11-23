@@ -24,6 +24,7 @@ class ProfilesActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_profiles)
+        com.streambox.tv.data.CrashReporter.offerIfCrashed(this)
         empty = findViewById(R.id.empty)
         btnAdd = findViewById(R.id.btnAdd)
         btnAdd.setOnClickListener { startActivity(Intent(this, AddProfileActivity::class.java)) }

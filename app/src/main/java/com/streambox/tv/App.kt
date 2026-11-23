@@ -16,6 +16,7 @@ class App : Application(), coil.ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        com.streambox.tv.data.CrashReporter.install(this)
         Prefs.init(this)
         com.streambox.tv.data.Reminders.init(this)
         com.streambox.tv.ui.Tr.init(this)

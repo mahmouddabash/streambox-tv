@@ -19,13 +19,21 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
-      - run: ./gradlew assembleDebug --stacktrace
-      - run: cp app/build/outputs/apk/debug/app-debug.apk StreamBoxTV.apk
+      - name: Unit tests
+        run: ./gradlew testReleaseUnitTest --stacktrace
+      - name: Build optimized release APK
+        run: ./gradlew assembleRelease --stacktrace
+      - run: cp app/build/outputs/apk/release/app-release.apk StreamBoxTV.apk
+      - name: Release notes from the commit message
+        run: |
+          git log -1 --pretty=%B | sed '/^Co-Authored-By/d;/^Claude-Session/d' > notes.md
+          echo "" >> notes.md
+          echo "Download **StreamBoxTV.apk** below, or update from the app (Settings → Check for updates)." >> notes.md
 
       # Keep the artifact (needs sign-in to download)
       - uses: actions/upload-artifact@v4
         with:
-          name: StreamBoxTV-debug-apk
+          name: StreamBoxTV-apk
           path: StreamBoxTV.apk
 
       # Publish a Release so the APK has a permanent one-tap link:
@@ -34,11 +42,6 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: StreamBox TV build ${{ github.run_number }}
-          body: |
-            Automatic build #${{ github.run_number }} from commit ${{ github.sha }}.
-
-            Download **StreamBoxTV.apk** below and install it on your Android TV.
-            Permanent newest-build link:
-            https://github.com/mahmouddabash/streambox-tv/releases/latest/download/StreamBoxTV.apk
+          body_path: notes.md
           files: StreamBoxTV.apk
           make_latest: true

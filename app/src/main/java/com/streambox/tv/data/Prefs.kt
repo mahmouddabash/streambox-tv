@@ -61,10 +61,26 @@ object Prefs {
 
     // ---------- Profiles ----------
 
+    /** Decrypted profiles kept in memory, so the Keystore is only used when they change. */
+    @Volatile
+    private var profileCache: List<Profile>? = null
+
+    /** Profiles JSON: encrypted when possible; older plain-text saves are encrypted on first read. */
+    private fun profilesJson(): String {
+        val enc = sp.getString("profiles_enc", null)
+        if (enc != null) Vault.decrypt(enc)?.let { return it }
+        val plain = sp.getString("profiles", "[]") ?: "[]"
+        if (enc == null && plain != "[]") {
+            Vault.encrypt(plain)?.let { sp.edit().putString("profiles_enc", it).remove("profiles").apply() }
+        }
+        return plain
+    }
+
     fun profiles(): List<Profile> {
+        profileCache?.let { return it }
         val out = ArrayList<Profile>()
         try {
-            val arr = JSONArray(sp.getString("profiles", "[]"))
+            val arr = JSONArray(profilesJson())
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 out.add(
@@ -82,6 +98,7 @@ object Prefs {
             }
         } catch (_: Exception) {
         }
+        profileCache = out
         return out
     }
 
@@ -95,7 +112,11 @@ object Prefs {
                     .put("m3uUrl", p.m3uUrl).put("epgUrl", p.epgUrl)
             )
         }
-        sp.edit().putString("profiles", arr.toString()).apply()
+        profileCache = list
+        val json = arr.toString()
+        val enc = Vault.encrypt(json)
+        if (enc != null) sp.edit().putString("profiles_enc", enc).remove("profiles").apply()
+        else sp.edit().putString("profiles", json).remove("profiles_enc").apply()
     }
 
     fun addProfile(p: Profile) = saveProfiles(profiles() + p)
@@ -232,6 +253,11 @@ object Prefs {
     var accent: String
         get() = sp.getString("accent", "violet") ?: "violet"
         set(v) = sp.edit().putString("accent", v).apply()
+
+    /** Build number the user last saw, for the "What's new" message after an update. */
+    var lastSeenBuild: Int
+        get() = sp.getInt("lastSeenBuild", 0)
+        set(v) = sp.edit().putInt("lastSeenBuild", v).apply()
 
     var lastUpdateCheck: Long
         get() = sp.getLong("lastUpdateCheck", 0L)

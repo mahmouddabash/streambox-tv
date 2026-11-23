@@ -78,6 +78,7 @@ class HomeActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
+        com.streambox.tv.data.CrashReporter.offerIfCrashed(this)
 
         val id = intent.getStringExtra(EXTRA_PROFILE)
         val p = Prefs.profiles().firstOrNull { it.id == id }
@@ -220,6 +221,7 @@ class HomeActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.accountInfo).text = parts.joinToString("   •   ")
 
         buildRows()
+        com.streambox.tv.data.Updater.showWhatsNew(this, lifecycleScope)
         com.streambox.tv.data.Updater.checkDaily(this, lifecycleScope)
         val first = rows.firstOrNull()?.cards?.firstOrNull()
         if (first != null) {

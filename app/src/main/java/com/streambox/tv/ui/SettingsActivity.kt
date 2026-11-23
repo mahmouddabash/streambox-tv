@@ -48,6 +48,9 @@ class SettingsActivity : AppCompatActivity() {
                 Prefs.streamFormat = if (it == 0) "ts" else "m3u8"
             }
         })
+        rows.add(Row("About & diagnostics", "Version, connection test, subscription status, problem reports, privacy") {
+            startActivity(android.content.Intent(this, AboutActivity::class.java))
+        })
         rows.add(Row("Language", if (Prefs.language == "ar") "العربية" else "English") {
             choose("Language", arrayOf("English", "العربية"), if (Prefs.language == "ar") 1 else 0) {
                 Tr.setLanguage(if (it == 1) "ar" else "en")

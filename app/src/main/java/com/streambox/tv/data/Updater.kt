@@ -45,6 +45,35 @@ object Updater {
         }
     }
 
+    /** After an update, shows the release notes of the new build once. */
+    fun showWhatsNew(activity: Activity, scope: LifecycleCoroutineScope) {
+        val seen = Prefs.lastSeenBuild
+        Prefs.lastSeenBuild = currentBuild
+        if (seen == 0 || seen >= currentBuild) return
+        scope.launch {
+            val notes = withContext(Dispatchers.IO) {
+                try {
+                    val req = Request.Builder()
+                        .url("https://api.github.com/repos/mahmouddabash/streambox-tv/releases/tags/v1.0.$currentBuild")
+                        .header("Accept", "application/vnd.github+json").build()
+                    Net.client.newCall(req).execute().use { r ->
+                        if (!r.isSuccessful) null else JSONObject(r.body?.string() ?: "{}").optString("body")
+                    }
+                } catch (_: Exception) {
+                    null
+                }
+            }?.lineSequence()
+                ?.filterNot { it.contains("Download **StreamBoxTV.apk**") }
+                ?.joinToString("\n")?.replace("**", "")?.trim()
+            if (notes.isNullOrBlank() || activity.isFinishing) return@launch
+            AlertDialog.Builder(activity)
+                .setTitle("What's new in build $currentBuild")
+                .setMessage(notes)
+                .setPositiveButton("OK", null)
+                .show()
+        }
+    }
+
     /** Silent daily check from the home screen; shows a dialog only when an update exists. */
     fun checkDaily(activity: Activity, scope: LifecycleCoroutineScope) {
         if (System.currentTimeMillis() - Prefs.lastUpdateCheck < DAY) return
