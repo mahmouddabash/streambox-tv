@@ -176,6 +176,29 @@ object Ui {
     }
 
     /** Long-press menu on a category: lock / unlock it. */
+    /** Long-press on a category: move it, hide it, or lock it with the PIN. */
+    fun categoryMenu(activity: Activity, section: String, cat: Category, onChanged: () -> Unit) {
+        if (cat.id.startsWith("__")) return
+        val options = arrayOf("▲  Move up", "▼  Move down", "Hide this category",
+            if (Repo.isUserLocked(section, cat)) "Unlock this category" else "Lock this category with PIN")
+        AlertDialog.Builder(activity)
+            .setTitle(cat.name)
+            .setItems(options) { _, w ->
+                when (w) {
+                    0 -> { Repo.moveCategory(section, cat.id, -1); onChanged() }
+                    1 -> { Repo.moveCategory(section, cat.id, 1); onChanged() }
+                    2 -> {
+                        Prefs.setCategoryHidden(Repo.profileId, "$section:${cat.id}", true)
+                        Repo.applyCustomisations()
+                        activity.toast("Hidden. Show it again in Settings → Channel manager")
+                        onChanged()
+                    }
+                    else -> categoryLockMenu(activity, section, cat, onChanged)
+                }
+            }
+            .show()
+    }
+
     fun categoryLockMenu(activity: Activity, section: String, cat: Category, onChanged: () -> Unit) {
         if (cat.id.startsWith("__")) return
         if (!Prefs.parentalEnabled) {

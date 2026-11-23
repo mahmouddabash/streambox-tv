@@ -36,6 +36,15 @@ object PlayerFactory {
                 .setExceedVideoConstraintsIfNecessary(true)
                 .setExceedRendererCapabilitiesIfNecessary(true)
                 .setForceHighestSupportedBitrate(Prefs.maxQuality)
+                .apply {
+                    // Automatic languages: the preferred audio track, and subtitles only when asked for.
+                    if (Prefs.audioLanguage.isNotEmpty()) setPreferredAudioLanguages(Prefs.audioLanguage, "en")
+                    if (Prefs.subtitleLanguage.isNotEmpty()) {
+                        setPreferredTextLanguages(Prefs.subtitleLanguage, "en")
+                        setSelectUndeterminedTextLanguage(true)
+                        setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    }
+                }
         )
         val bandwidth = DefaultBandwidthMeter.Builder(context)
             .setInitialBitrateEstimate(25_000_000L)
@@ -66,6 +75,12 @@ object PlayerFactory {
         player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
         return player
     }
+
+    /** Languages offered in Settings (code to name). */
+    val LANGUAGES = listOf(
+        "ar" to "العربية (Arabic)", "en" to "English", "fr" to "Français", "tr" to "Türkçe", "es" to "Español",
+        "de" to "Deutsch", "hi" to "हिन्दी (Hindi)", "ur" to "اردو (Urdu)", "fa" to "فارسی (Persian)"
+    )
 
     /** ◀ ▶ / ⏪ ⏩ step for movies and episodes. */
     const val SEEK_STEP_MS = 60_000L

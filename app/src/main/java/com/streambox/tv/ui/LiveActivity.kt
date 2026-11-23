@@ -75,7 +75,7 @@ class LiveActivity : AppCompatActivity() {
                 }
             },
             onLongClick = { c, _ ->
-                Ui.categoryLockMenu(this, Repo.SECTION_LIVE, c) { catAdapter.submit(categories(), catAdapter.selected) }
+                Ui.categoryMenu(this, Repo.SECTION_LIVE, c) { catAdapter.submit(categories(), catAdapter.selected) }
                 true
             }
         )
@@ -238,7 +238,9 @@ class LiveActivity : AppCompatActivity() {
         val options = arrayOf(
             "Play full screen",
             if (isFav) "Remove from favourites" else "Add to favourites",
-            "TV guide"
+            "TV guide",
+            "Rename channel",
+            "Hide channel"
         )
         AlertDialog.Builder(this)
             .setTitle(c.name)
@@ -251,6 +253,16 @@ class LiveActivity : AppCompatActivity() {
                         if (currentCat == Repo.CAT_FAV) showCategory(currentCat) else chAdapter.refresh(pos)
                     }
                     2 -> openGuide(c)
+                    3 -> Ui.input(this, "Rename channel (empty = original name)", c.name) { name ->
+                        Prefs.setChannelName(Repo.profileId, c.id, name)
+                        Repo.applyCustomisations()
+                        showCategory(currentCat)
+                    }
+                    4 -> {
+                        Prefs.setChannelHidden(Repo.profileId, c.id, true)
+                        toast("Hidden. Show it again in Settings → Channel manager")
+                        showCategory(currentCat)
+                    }
                 }
             }
             .show()

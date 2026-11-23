@@ -259,6 +259,64 @@ object Prefs {
         get() = sp.getInt("lastSeenBuild", 0)
         set(v) = sp.edit().putInt("lastSeenBuild", v).apply()
 
+    /** Preferred audio language (ISO code), "" = the stream's default. */
+    var audioLanguage: String
+        get() = sp.getString("audioLang", "") ?: ""
+        set(v) = sp.edit().putString("audioLang", v).apply()
+
+    /** Subtitles to switch on automatically (ISO code), "" = off. */
+    var subtitleLanguage: String
+        get() = sp.getString("subLang", "") ?: ""
+        set(v) = sp.edit().putString("subLang", v).apply()
+
+    // ---------- Channel manager (per provider profile) ----------
+
+    fun hiddenChannels(pid: String): Set<String> = sp.getStringSet("hideCh_$pid", emptySet()) ?: emptySet()
+    fun setChannelHidden(pid: String, id: String, hidden: Boolean) {
+        val s = HashSet(hiddenChannels(pid))
+        if (hidden) s.add(id) else s.remove(id)
+        sp.edit().putStringSet("hideCh_$pid", s).apply()
+    }
+
+    /** Entries are "section:categoryId". */
+    fun hiddenCategories(pid: String): Set<String> = sp.getStringSet("hideCat_$pid", emptySet()) ?: emptySet()
+    fun setCategoryHidden(pid: String, key: String, hidden: Boolean) {
+        val s = HashSet(hiddenCategories(pid))
+        if (hidden) s.add(key) else s.remove(key)
+        sp.edit().putStringSet("hideCat_$pid", s).apply()
+    }
+
+    fun channelNames(pid: String): Map<String, String> {
+        val out = HashMap<String, String>()
+        try {
+            val o = JSONObject(sp.getString("rename_$pid", "{}") ?: "{}")
+            for (k in o.keys()) out[k] = o.getString(k)
+        } catch (_: Exception) {
+        }
+        return out
+    }
+
+    /** Blank [name] restores the provider's name. */
+    fun setChannelName(pid: String, id: String, name: String) {
+        val m = HashMap(channelNames(pid))
+        if (name.isBlank()) m.remove(id) else m[id] = name.trim()
+        sp.edit().putString("rename_$pid", JSONObject(m as Map<*, *>).toString()).apply()
+    }
+
+    fun categoryOrder(pid: String, section: String): List<String> = recentList("catOrder_${section}_$pid")
+    fun setCategoryOrder(pid: String, section: String, ids: List<String>) = saveRecentList("catOrder_${section}_$pid", ids)
+
+    /** 0 = provider order, 1 = A–Z, 2 = channel number */
+    var channelSort: Int
+        get() = sp.getInt("chSort", 0)
+        set(v) = sp.edit().putInt("chSort", v).apply()
+
+    fun clearChannelManager(pid: String) {
+        val e = sp.edit().remove("hideCh_$pid").remove("hideCat_$pid").remove("rename_$pid")
+        for (s in listOf("live", "vod", "series")) e.remove("catOrder_${s}_$pid")
+        e.apply()
+    }
+
     var lastUpdateCheck: Long
         get() = sp.getLong("lastUpdateCheck", 0L)
         set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()

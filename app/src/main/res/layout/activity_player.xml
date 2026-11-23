@@ -12,6 +12,44 @@
         android:focusable="true"
         app:show_buffering="when_playing" />
 
+    <!-- Channel list over the live picture (OK) -->
+    <LinearLayout
+        android:id="@+id/chPanel"
+        android:layout_width="460dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="@drawable/bg_side_panel"
+        android:orientation="vertical"
+        android:paddingStart="28dp"
+        android:paddingTop="26dp"
+        android:paddingEnd="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/chPanelTitle"
+            style="@style/RowTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="10dp"
+            android:text="◀ change group   •   OK watch   •   Back close"
+            android:textColor="@color/text_dim"
+            android:textSize="12sp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chPanelList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="20dp" />
+    </LinearLayout>
+
     <!-- Channel number being typed on the remote -->
     <TextView
         android:id="@+id/number"
@@ -130,7 +168,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="▲▼ or 0-9 change channel   ⏯ pause / rewind   ◀▶ menu   OK info"
+            android:text="OK channel list   ▲▼ or 0-9 change channel   ⏯ pause   ◀▶ menu   INFO details"
             android:textColor="@color/text_dim"
             android:textSize="12sp" />
     </LinearLayout>

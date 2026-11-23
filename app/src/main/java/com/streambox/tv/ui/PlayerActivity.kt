@@ -58,6 +58,13 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var ovProgress: ProgressBar
     private lateinit var errorView: TextView
     private lateinit var numberView: TextView
+    private lateinit var chPanel: View
+    private lateinit var chPanelTitle: TextView
+    private lateinit var chPanelList: androidx.recyclerview.widget.RecyclerView
+    private lateinit var chPanelAdapter: SimpleAdapter<PlayItem>
+    /** Channels shown in the side list (may be another group than the one playing). */
+    private var panelItems: List<PlayItem> = emptyList()
+    private var panelGroup = "Channels"
     private lateinit var shiftView: TextView
 
     // Typing a channel number on the remote
@@ -140,6 +147,24 @@ class PlayerActivity : AppCompatActivity() {
         ovProgress = findViewById(R.id.ovProgress)
         errorView = findViewById(R.id.error)
         numberView = findViewById(R.id.number)
+        chPanel = findViewById(R.id.chPanel)
+        chPanelTitle = findViewById(R.id.chPanelTitle)
+        chPanelList = findViewById(R.id.chPanelList)
+        chPanelList.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        chPanelList.itemAnimator = null
+        chPanelAdapter = SimpleAdapter(
+            R.layout.item_channel,
+            bind = { v, it, _ ->
+                val c = Repo.channel(it.channelId)
+                v.findViewById<TextView>(R.id.num).text = c?.num?.toString() ?: ""
+                v.findViewById<TextView>(R.id.name).text = it.title
+                val logo = v.findViewById<android.widget.ImageView>(R.id.logo)
+                if (c != null && c.logo.isNotBlank()) logo.loadUrl(c.logo) else logo.setImageDrawable(null)
+                v.findViewById<TextView>(R.id.badge).text = if (it.channelId == current.channelId) "▶" else ""
+            },
+            onClick = { item, pos -> playFromPanel(item, pos) }
+        )
+        chPanelList.adapter = chPanelAdapter
         playerView.findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
             ?.setKeyTimeIncrement(PlayerFactory.SEEK_STEP_MS)
         shiftView = findViewById(R.id.shift)
@@ -597,6 +622,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         wasInPip = isInPip
         if (isInPip) {
+            chPanel.visibility = View.GONE
             overlay.visibility = View.GONE
             numberView.visibility = View.GONE
             shiftView.visibility = View.GONE
@@ -691,6 +717,68 @@ class PlayerActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ Overlay
 
+    // ------------------------------------------------------------------ Channel list over the picture
+
+    private val panelVisible get() = chPanel.visibility == View.VISIBLE
+
+    private fun showChannelPanel() {
+        if (panelItems.isEmpty() || panelItems.none { it.channelId == current.channelId }) {
+            panelItems = items
+            panelGroup = "Channels"
+        }
+        chPanelTitle.text = "$panelGroup  (${panelItems.size})"
+        val pos = panelItems.indexOfFirst { it.channelId == current.channelId }.coerceAtLeast(0)
+        chPanelAdapter.submit(panelItems, pos)
+        overlay.visibility = View.GONE
+        chPanel.visibility = View.VISIBLE
+        (chPanelList.layoutManager as androidx.recyclerview.widget.LinearLayoutManager).scrollToPositionWithOffset(pos, 200)
+        chPanelList.post {
+            chPanelList.layoutManager?.findViewByPosition(pos)?.requestFocus() ?: chPanelList.requestFocus()
+        }
+    }
+
+    private fun hideChannelPanel() {
+        chPanel.visibility = View.GONE
+        playerView.requestFocus()
+    }
+
+    private fun playFromPanel(item: PlayItem, pos: Int) {
+        hideChannelPanel()
+        if (item.channelId == current.channelId) return
+        rememberPrevious()
+        if (panelItems !== items) {
+            items = panelItems
+            Repo.queue = items
+        }
+        index = pos
+        startItem(resume = false)
+    }
+
+    /** ◀ in the list: pick another group (favourites, recent, a category) without leaving the picture. */
+    private fun chooseGroup() {
+        val cats = ArrayList<com.streambox.tv.data.Category>()
+        cats.add(com.streambox.tv.data.Category(Repo.CAT_FAV, "★ Favourites"))
+        cats.add(com.streambox.tv.data.Category(Repo.CAT_RECENT, "Recently watched"))
+        cats.add(com.streambox.tv.data.Category(Repo.CAT_ALL, "All channels"))
+        cats.addAll(Repo.liveCats.filter { !Repo.isLocked(Repo.SECTION_LIVE, it) })
+        AlertDialog.Builder(this)
+            .setTitle("Channel group")
+            .setItems(cats.map { it.name }.toTypedArray()) { _, w ->
+                val list = Repo.channelsIn(cats[w].id)
+                if (list.isEmpty()) {
+                    toast("No channels in ${cats[w].name}")
+                    return@setItems
+                }
+                panelItems = list.map { PlayItem("", it.name, Repo.urlFor(it), true, it.id) }
+                panelGroup = cats[w].name
+                chPanelTitle.text = "$panelGroup  (${panelItems.size})"
+                chPanelAdapter.submit(panelItems, panelItems.indexOfFirst { it.channelId == current.channelId })
+                chPanelList.scrollToPosition(0)
+                chPanelList.post { chPanelList.layoutManager?.findViewByPosition(0)?.requestFocus() }
+            }
+            .show()
+    }
+
     private fun toggleOverlay() {
         if (overlay.visibility == View.VISIBLE) overlay.visibility = View.GONE else showOverlay()
     }
@@ -735,6 +823,20 @@ class PlayerActivity : AppCompatActivity() {
         if (items.isEmpty() || player == null) return super.dispatchKeyEvent(event)
         val live = current.isLive
         val down = event.action == KeyEvent.ACTION_DOWN
+
+        if (panelVisible) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (event.action == KeyEvent.ACTION_UP) hideChannelPanel()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (down && event.repeatCount == 0) chooseGroup()
+                    return true
+                }
+            }
+            return super.dispatchKeyEvent(event)
+        }
 
         if (failed) when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
@@ -819,7 +921,11 @@ class PlayerActivity : AppCompatActivity() {
                     if (down) zap(-1)
                     return true
                 }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_INFO -> {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    if (down && event.repeatCount == 0) showChannelPanel()
+                    return true
+                }
+                KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_GUIDE -> {
                     if (down && event.repeatCount == 0) toggleOverlay()
                     return true
                 }

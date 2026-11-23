@@ -55,7 +55,7 @@ class BrowseActivity : AppCompatActivity() {
                 }
             },
             onLongClick = { c, _ ->
-                Ui.categoryLockMenu(this, section, c) { catAdapter.submit(categories(), catAdapter.selected) }
+                Ui.categoryMenu(this, section, c) { catAdapter.submit(categories(), catAdapter.selected) }
                 true
             }
         )

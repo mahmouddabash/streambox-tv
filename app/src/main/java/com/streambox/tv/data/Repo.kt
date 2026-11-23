@@ -201,6 +201,7 @@ object Repo {
         profile = null
         loaded = false
         liveCats = emptyList(); vodCats = emptyList(); seriesCats = emptyList()
+        rawLiveCats = emptyList(); rawVodCats = emptyList(); rawSeriesCats = emptyList(); rawChannels = emptyList()
         channels = emptyList(); movies = emptyList(); series = emptyList()
         channelById = emptyMap(); movieById = emptyMap(); seriesById = emptyMap()
         xmltv = null
@@ -352,10 +353,10 @@ object Repo {
     ) {
         profile = p
         account = acc
-        liveCats = lc; channels = ch
-        vodCats = vc; movies = mv
-        seriesCats = sc; series = sr
-        channelById = ch.associateBy { it.id }
+        rawLiveCats = lc; rawChannels = ch
+        rawVodCats = vc; movies = mv
+        rawSeriesCats = sc; series = sr
+        applyCustomisations()
         movieById = mv.associateBy { it.id }
         seriesById = sr.associateBy { it.id }
         m3uEpgUrl = epgUrl
@@ -364,6 +365,55 @@ object Repo {
         movieInfoCache.clear()
         serverOffsetMs = null
         loaded = true
+    }
+
+    // ------------------------------------------------------------------ Channel manager
+
+    private var rawLiveCats: List<Category> = emptyList()
+    private var rawVodCats: List<Category> = emptyList()
+    private var rawSeriesCats: List<Category> = emptyList()
+    private var rawChannels: List<Channel> = emptyList()
+
+    /** Every category of a section as the provider sends it (including hidden ones). */
+    fun allCategories(section: String): List<Category> = when (section) {
+        SECTION_VOD -> rawVodCats
+        SECTION_SERIES -> rawSeriesCats
+        else -> rawLiveCats
+    }
+
+    /** Applies the user's channel names, hidden categories and category order. Call after any change. */
+    fun applyCustomisations() {
+        val pid = profileId
+        val hidden = Prefs.hiddenCategories(pid)
+        fun arrange(section: String, list: List<Category>): List<Category> {
+            val order = Prefs.categoryOrder(pid, section)
+            val byId = list.associateBy { it.id }
+            val ordered = order.mapNotNull { byId[it] } + list.filter { it.id !in order }
+            return ordered.filter { "$section:${it.id}" !in hidden }
+        }
+        liveCats = arrange(SECTION_LIVE, rawLiveCats)
+        vodCats = arrange(SECTION_VOD, rawVodCats)
+        seriesCats = arrange(SECTION_SERIES, rawSeriesCats)
+        val names = Prefs.channelNames(pid)
+        channels = if (names.isEmpty()) rawChannels else rawChannels.map { c -> names[c.id]?.let { c.copy(name = it) } ?: c }
+        channelById = channels.associateBy { it.id }
+    }
+
+    private fun hiddenCatIds(section: String): Set<String> {
+        val prefix = "$section:"
+        return Prefs.hiddenCategories(profileId).filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet()
+    }
+
+    /** Moves a category one place up (-1) or down (+1) in its section. */
+    fun moveCategory(section: String, catId: String, delta: Int) {
+        val visible = when (section) { SECTION_VOD -> vodCats; SECTION_SERIES -> seriesCats; else -> liveCats }.map { it.id }.toMutableList()
+        val i = visible.indexOf(catId)
+        val j = i + delta
+        if (i < 0 || j !in visible.indices) return
+        visible[i] = visible[j].also { visible[j] = visible[i] }
+        val rest = allCategories(section).map { it.id }.filter { it !in visible }
+        Prefs.setCategoryOrder(profileId, section, visible + rest)
+        applyCustomisations()
     }
 
     private fun readCats(f: File): List<Category> {
@@ -394,7 +444,8 @@ object Repo {
     // ------------------------------------------------------------------ Catalogue queries
 
     fun channelsIn(catId: String, archiveOnly: Boolean = false): List<Channel> {
-        val locked = lockedIds(SECTION_LIVE, liveCats)
+        val locked = lockedIds(SECTION_LIVE, liveCats) + hiddenCatIds(SECTION_LIVE)
+        val hiddenCh = Prefs.hiddenChannels(profileId)
         val base: List<Channel> = when (catId) {
             CAT_ALL -> channels.filter { it.categoryId !in locked }
             CAT_FAV -> {
@@ -404,11 +455,18 @@ object Repo {
             CAT_RECENT -> Prefs.recentChannels(profileId).mapNotNull { channelById[it] }.filter { it.categoryId !in locked }
             else -> channels.filter { it.categoryId == catId }
         }
-        return if (archiveOnly) base.filter { it.hasArchive } else base
+        var out = if (hiddenCh.isEmpty()) base else base.filter { it.id !in hiddenCh }
+        if (archiveOnly) out = out.filter { it.hasArchive }
+        return when {
+            catId == CAT_RECENT -> out
+            Prefs.channelSort == 1 -> out.sortedBy { it.name.lowercase() }
+            Prefs.channelSort == 2 -> out.sortedBy { it.num }
+            else -> out
+        }
     }
 
     fun moviesIn(catId: String): List<Movie> {
-        val locked = lockedIds(SECTION_VOD, vodCats)
+        val locked = lockedIds(SECTION_VOD, vodCats) + hiddenCatIds(SECTION_VOD)
         return when (catId) {
             CAT_ALL -> movies.filter { it.categoryId !in locked }
             CAT_FAV -> {
@@ -421,7 +479,7 @@ object Repo {
     }
 
     fun seriesIn(catId: String): List<Series> {
-        val locked = lockedIds(SECTION_SERIES, seriesCats)
+        val locked = lockedIds(SECTION_SERIES, seriesCats) + hiddenCatIds(SECTION_SERIES)
         return when (catId) {
             CAT_ALL -> series.filter { it.categoryId !in locked }
             CAT_FAV -> {

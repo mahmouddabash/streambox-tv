@@ -124,6 +124,21 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 .show()
         })
+        fun langName(code: String, none: String) =
+            PlayerFactory.LANGUAGES.firstOrNull { it.first == code }?.second ?: none
+        rows.add(Row("Channel manager", "Sort channels, show hidden channels and categories, undo renames") { channelManager() })
+        rows.add(Row("Audio language", langName(Prefs.audioLanguage, "Stream default") + "   •   chosen automatically on every channel and movie") {
+            val opts = listOf("" to "Stream default") + PlayerFactory.LANGUAGES
+            choose("Audio language", opts.map { it.second }.toTypedArray(), opts.indexOfFirst { it.first == Prefs.audioLanguage }.coerceAtLeast(0)) {
+                Prefs.audioLanguage = opts[it].first
+            }
+        })
+        rows.add(Row("Subtitles", langName(Prefs.subtitleLanguage, "Off") + "   •   switched on automatically when available") {
+            val opts = listOf("" to "Off") + PlayerFactory.LANGUAGES
+            choose("Subtitles", opts.map { it.second }.toTypedArray(), opts.indexOfFirst { it.first == Prefs.subtitleLanguage }.coerceAtLeast(0)) {
+                Prefs.subtitleLanguage = opts[it].first
+            }
+        })
         rows.add(Row("Subtitle style", "Size, colour and background of subtitles") {
             val sizes = arrayOf("Small", "Normal", "Large", "Extra large")
             val colors = arrayOf("White", "Yellow", "Cyan")
@@ -192,6 +207,64 @@ class SettingsActivity : AppCompatActivity() {
                 onPick(which)
                 d.dismiss()
                 refresh()
+            }
+            .show()
+    }
+
+    private fun channelManager() {
+        if (!Repo.loaded) {
+            toast("Open a profile first")
+            return
+        }
+        val pid = Repo.profileId
+        val sorts = arrayOf("Provider order", "A–Z", "Channel number")
+        val hiddenCh = Prefs.hiddenChannels(pid).mapNotNull { Repo.channel(it) }
+        val hiddenCats = Prefs.hiddenCategories(pid).mapNotNull { key ->
+            val section = key.substringBefore(':')
+            val id = key.substringAfter(':')
+            Repo.allCategories(section).firstOrNull { it.id == id }?.let { key to it }
+        }
+        val options = arrayOf(
+            "Sort channels: ${sorts[Prefs.channelSort.coerceIn(0, 2)]}",
+            "Hidden channels (${hiddenCh.size})",
+            "Hidden categories (${hiddenCats.size})",
+            "Undo all renames, hiding and ordering"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Channel manager")
+            .setItems(options) { _, w ->
+                when (w) {
+                    0 -> choose("Sort channels", sorts, Prefs.channelSort) { Prefs.channelSort = it }
+                    1 -> if (hiddenCh.isEmpty()) toast("No hidden channels. Hide one by holding OK on it in Live TV") else
+                        AlertDialog.Builder(this)
+                            .setTitle("Show a hidden channel again")
+                            .setItems(hiddenCh.map { it.name }.toTypedArray()) { _, i ->
+                                Prefs.setChannelHidden(pid, hiddenCh[i].id, false)
+                                toast("${hiddenCh[i].name} is visible again")
+                                refresh()
+                            }
+                            .show()
+                    2 -> if (hiddenCats.isEmpty()) toast("No hidden categories. Hide one by holding OK on it") else
+                        AlertDialog.Builder(this)
+                            .setTitle("Show a hidden category again")
+                            .setItems(hiddenCats.map { it.second.name }.toTypedArray()) { _, i ->
+                                Prefs.setCategoryHidden(pid, hiddenCats[i].first, false)
+                                Repo.applyCustomisations()
+                                toast("${hiddenCats[i].second.name} is visible again")
+                                refresh()
+                            }
+                            .show()
+                    else -> AlertDialog.Builder(this)
+                        .setTitle("Undo all channel changes?")
+                        .setMessage("Channel names, hidden channels and categories, and category order go back to the provider's.")
+                        .setPositiveButton("Undo all") { _, _ ->
+                            Prefs.clearChannelManager(pid)
+                            Repo.applyCustomisations()
+                            refresh()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
             }
             .show()
     }
