@@ -353,6 +353,66 @@ object Prefs {
         sp.edit().putStringSet("kidsCat_$pid", s).apply()
     }
 
+    // ---------- Backup ----------
+
+    /** Keys that only make sense on this TV (device-bound encryption, one-time unlocks). */
+    private val notBackedUp = setOf("profiles_enc", "profiles", "protectedUnlocked", "lastUpdateCheck", "lastSeenBuild")
+
+    fun exportAll(): JSONObject {
+        val prefs = JSONObject()
+        for ((k, v) in sp.all) {
+            if (k in notBackedUp || v == null) continue
+            val e = JSONObject()
+            when (v) {
+                is String -> e.put("t", "s").put("v", v)
+                is Int -> e.put("t", "i").put("v", v)
+                is Long -> e.put("t", "l").put("v", v)
+                is Boolean -> e.put("t", "b").put("v", v)
+                is Float -> e.put("t", "f").put("v", v.toDouble())
+                is Set<*> -> e.put("t", "set").put("v", JSONArray(v.map { it.toString() }))
+                else -> continue
+            }
+            prefs.put(k, e)
+        }
+        val profiles = JSONArray()
+        for (p in profiles()) {
+            profiles.put(JSONObject().put("id", p.id).put("name", p.name).put("type", p.type)
+                .put("server", p.server).put("username", p.username).put("password", p.password)
+                .put("m3uUrl", p.m3uUrl).put("epgUrl", p.epgUrl))
+        }
+        return JSONObject().put("version", 1).put("prefs", prefs).put("profiles", profiles)
+    }
+
+    fun importAll(o: JSONObject) {
+        val prefs = o.getJSONObject("prefs")
+        val e = sp.edit()
+        for (k in prefs.keys()) {
+            if (k in notBackedUp) continue
+            val item = prefs.getJSONObject(k)
+            when (item.optString("t")) {
+                "s" -> e.putString(k, item.getString("v"))
+                "i" -> e.putInt(k, item.getInt("v"))
+                "l" -> e.putLong(k, item.getLong("v"))
+                "b" -> e.putBoolean(k, item.getBoolean("v"))
+                "f" -> e.putFloat(k, item.getDouble("v").toFloat())
+                "set" -> {
+                    val arr = item.getJSONArray("v")
+                    e.putStringSet(k, (0 until arr.length()).map { arr.getString(it) }.toSet())
+                }
+            }
+        }
+        e.commit()
+        val arr = o.optJSONArray("profiles") ?: JSONArray()
+        val list = ArrayList<Profile>()
+        for (i in 0 until arr.length()) {
+            val p = arr.getJSONObject(i)
+            list.add(Profile(id = p.optString("id"), name = p.optString("name"), type = p.optString("type"),
+                server = p.optString("server"), username = p.optString("username"), password = p.optString("password"),
+                m3uUrl = p.optString("m3uUrl"), epgUrl = p.optString("epgUrl")))
+        }
+        if (list.isNotEmpty()) saveProfiles(list)
+    }
+
     var lastUpdateCheck: Long
         get() = sp.getLong("lastUpdateCheck", 0L)
         set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()

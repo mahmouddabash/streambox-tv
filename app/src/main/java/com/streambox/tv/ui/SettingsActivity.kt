@@ -6,6 +6,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.streambox.tv.R
@@ -126,6 +127,7 @@ class SettingsActivity : AppCompatActivity() {
         })
         fun langName(code: String, none: String) =
             PlayerFactory.LANGUAGES.firstOrNull { it.first == code }?.second ?: none
+        rows.add(Row("Backup & restore", "Save everything (logins, viewers, favourites, settings) to your phone or a USB drive, and restore it on any TV") { backupMenu() })
         rows.add(Row("Viewers", (listOf(Prefs.mainViewerName) + Prefs.viewers(Repo.profileId).map { (if (it.kids) "🧒 " else "") + it.name })
             .joinToString(", ") + "   •   separate favourites and Continue watching, Kids profiles") { viewersMenu() })
         rows.add(Row("Channel manager", "Sort channels, show hidden channels and categories, undo renames") { channelManager() })
@@ -211,6 +213,134 @@ class SettingsActivity : AppCompatActivity() {
                 refresh()
             }
             .show()
+    }
+
+    // ------------------------------------------------------------------ Backup & restore
+
+    private var backupServer: com.streambox.tv.data.BackupServer? = null
+    private val passwordType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+
+    private fun backupMenu() {
+        val options = arrayOf(
+            "📱  Back up to my phone",
+            "📱  Restore from my phone",
+            "💾  Save backup on this TV or a USB drive",
+            "💾  Restore from a file on this TV or USB"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Backup & restore")
+            .setItems(options) { _, w ->
+                when (w) {
+                    0 -> withNewBackup { text -> showPhonePage(text) }
+                    1 -> showPhonePage(null)
+                    2 -> withNewBackup { text ->
+                        val drives = com.streambox.tv.data.Backup.folders(this)
+                        val save = { i: Int ->
+                            try {
+                                val f = com.streambox.tv.data.Backup.saveToFile(this, text, i)
+                                AlertDialog.Builder(this).setTitle("Backup saved").setMessage(f.absolutePath)
+                                    .setPositiveButton("OK", null).show()
+                            } catch (e: Exception) {
+                                toast("Couldn't save: ${e.message}")
+                            }
+                        }
+                        if (drives.size <= 1) save(0) else choose("Save to", drives.mapIndexed { i, d ->
+                            (if (i == 0) "TV storage" else "USB / SD card $i") + "   " + d.absolutePath
+                        }.toTypedArray(), 0) { save(it) }
+                    }
+                    else -> {
+                        val files = com.streambox.tv.data.Backup.files(this)
+                        if (files.isEmpty()) toast("No backup files found on this TV or USB drives")
+                        else AlertDialog.Builder(this)
+                            .setTitle("Choose a backup")
+                            .setItems(files.map { it.name + "   " + (it.parentFile?.parent ?: "") }.toTypedArray()) { _, i ->
+                                askRestorePassword(files[i].readText())
+                            }
+                            .show()
+                    }
+                }
+            }
+            .show()
+    }
+
+    /** Asks for a password (twice) and builds the encrypted backup in the background. */
+    private fun withNewBackup(then: (String) -> Unit) {
+        Ui.input(this, "Choose a backup password (4+ characters)", "", passwordType) { pw ->
+            if (pw.length < 4) { toast("Use at least 4 characters"); return@input }
+            Ui.input(this, "Repeat the backup password", "", passwordType) { again ->
+                if (again != pw) { toast("Passwords do not match"); return@input }
+                toast("Preparing backup…")
+                lifecycleScope.launch {
+                    val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                        com.streambox.tv.data.Backup.create(pw)
+                    }
+                    then(text)
+                }
+            }
+        }
+    }
+
+    /** QR code for the phone page: download [backupText] (if any) and/or upload a backup to restore. */
+    private fun showPhonePage(backupText: String?) {
+        backupServer?.stop()
+        val server = com.streambox.tv.data.BackupServer(backupText) { uploaded ->
+            runOnUiThread { askRestorePassword(uploaded) }
+        }
+        val url = server.start()
+        if (url == null) {
+            toast("Connect the TV to your home network first")
+            return
+        }
+        backupServer = server
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+        }
+        box.addView(TextView(this).apply {
+            text = (if (backupText != null) "Scan with your phone and tap “Download backup file”." else "Scan with your phone and choose your .sbk backup file.") +
+                "\nThe phone must be on the same Wi-Fi as the TV.\n\n$url"
+            setTextColor(0xFFF5F7FF.toInt())
+        })
+        box.addView(android.widget.ImageView(this).apply {
+            val size = (260 * resources.displayMetrics.density).toInt()
+            setImageBitmap(Qr.bitmap(url, size))
+            layoutParams = android.widget.LinearLayout.LayoutParams(size, size).apply { topMargin = pad / 2 }
+        })
+        AlertDialog.Builder(this)
+            .setTitle(if (backupText != null) "Back up to my phone" else "Restore from my phone")
+            .setView(box)
+            .setPositiveButton("Done", null)
+            .setOnDismissListener { if (backupServer === server) { server.stop(); backupServer = null } }
+            .show()
+    }
+
+    private fun askRestorePassword(text: String) {
+        Ui.input(this, "Backup password", "", passwordType) { pw ->
+            toast("Restoring…")
+            lifecycleScope.launch {
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    com.streambox.tv.data.Backup.restore(text, pw)
+                }
+                if (!ok) {
+                    AlertDialog.Builder(this@SettingsActivity).setTitle("Couldn't restore")
+                        .setMessage("Wrong password, or the file is not a StreamBox backup.")
+                        .setPositiveButton("OK", null).show()
+                    return@launch
+                }
+                backupServer?.stop()
+                Repo.close()
+                toast("Backup restored")
+                // Start fresh so every screen uses the restored settings.
+                startActivity(android.content.Intent(this@SettingsActivity, SplashActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        backupServer?.stop()
+        super.onDestroy()
     }
 
     private fun viewersMenu() {
