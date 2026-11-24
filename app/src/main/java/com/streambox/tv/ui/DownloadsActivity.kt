@@ -43,7 +43,8 @@ class DownloadsActivity : AppCompatActivity() {
                     Downloads.FAILED -> "⚠"
                     else -> "🕒"
                 }
-                v.findViewById<TextView>(R.id.line1).text = "$icon  ${d.title}"
+                val name = d.title.ifBlank { File(d.file).nameWithoutExtension.ifBlank { "Video" } }
+                v.findViewById<TextView>(R.id.line1).text = "$icon  $name"
                 val have = Downloads.bytes(d)
                 val size = if (d.total > 0) "${gb(have)} / ${gb(d.total)}" else gb(have)
                 val pct = if (d.total > 0) " ${(have * 100 / d.total).coerceIn(0, 100)}%  •" else ""
@@ -79,7 +80,8 @@ class DownloadsActivity : AppCompatActivity() {
 
     private fun gb(b: Long): String =
         if (b >= 1_073_741_824L) String.format(java.util.Locale.US, "%.2f GB", b / 1_073_741_824.0)
-        else String.format(java.util.Locale.US, "%.0f MB", b / 1_048_576.0)
+        else if (b >= 1_048_576L) String.format(java.util.Locale.US, "%.0f MB", b / 1_048_576.0)
+        else String.format(java.util.Locale.US, "%.0f KB", b / 1024.0)
 
     private fun reload() {
         val all = Downloads.all().filter { it.profileId == Repo.profileId || !Repo.loaded }.sortedByDescending { it.addedAt }
@@ -97,11 +99,12 @@ class DownloadsActivity : AppCompatActivity() {
         })
         when (d.status) {
             Downloads.RUNNING, Downloads.QUEUED -> actions.add("⏸  Pause" to { Downloads.pause(this, d.id); reload() })
-            Downloads.PAUSED, Downloads.FAILED -> actions.add("⬇  Resume download" to { Downloads.resume(this, d.id); reload() })
+            Downloads.PAUSED -> actions.add("⬇  Resume download" to { Downloads.resume(this, d.id); reload() })
+            Downloads.FAILED -> actions.add("↻  Try again" to { Downloads.resume(this, d.id); reload() })
         }
         actions.add("🗑  Delete" to { Downloads.delete(this, d.id); reload() })
         AlertDialog.Builder(this)
-            .setTitle(d.title)
+            .setTitle(d.title.ifBlank { File(d.file).nameWithoutExtension })
             .setItems(actions.map { it.first }.toTypedArray()) { _, w -> actions[w].second() }
             .show()
     }

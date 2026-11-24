@@ -105,9 +105,9 @@ object Downloads {
     fun add(context: Context, key: String, title: String, poster: String, url: String): Boolean {
         if (all().any { it.key == key && it.profileId == Repo.profileId && it.status != FAILED }) return false
         val ext = url.substringBefore('?').substringAfterLast('.', "mp4").take(5).ifBlank { "mp4" }
-        val safe = title.replace(Regex("[^\\p{L}\\p{N} ._-]+"), "_").take(70).trim()
+        val safe = title.ifBlank { "Video" }.replace(Regex("[^\\p{L}\\p{N} ._-]+"), "_").take(70).trim()
         val file = File(dir(context), "$safe.$ext")
-        val item = Item("dl${System.nanoTime()}", Repo.profileId, key, title, poster, url, file.absolutePath, QUEUED)
+        val item = Item("dl${System.nanoTime()}", Repo.profileId, key, title.ifBlank { file.nameWithoutExtension }, poster, url, file.absolutePath, QUEUED)
         save(all().filterNot { it.key == key && it.profileId == Repo.profileId } + item)
         DownloadService.start(context)
         return true
@@ -131,8 +131,43 @@ object Downloads {
         DownloadService.start(context)
     }
 
+    /**
+     * Checks that a finished file is really a video. IPTV servers often answer with a short text
+     * ("max connections reached", an HTML error page) or an HLS playlist instead of the film.
+     * Returns why the file is unusable, or null when it looks fine.
+     */
+    fun badFileReason(f: File): String? {
+        if (!f.exists() || f.length() == 0L) return "The server sent nothing"
+        val head = ByteArray(minOf(f.length(), 1024L).toInt())
+        try {
+            f.inputStream().use { var off = 0; while (off < head.size) { val n = it.read(head, off, head.size - off); if (n < 0) break; off += n } }
+        } catch (_: Exception) {
+            return "The file can't be read"
+        }
+        val txt = String(head, Charsets.ISO_8859_1)
+        if (txt.trimStart('\uFEFF', ' ', '\r', '\n').startsWith("#EXTM3U"))
+            return "Your server sends this title as a live stream playlist, which can't be saved. Watch it online instead"
+        val printable = head.count { b -> val c = b.toInt() and 0xff; c == 9 || c == 10 || c == 13 || c in 32..126 }
+        if (f.length() < 2_000_000 && printable > head.size * 0.9) {
+            val msg = txt.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim().take(80)
+            return "Your provider refused" + (if (msg.isNotEmpty()) " (\"$msg\")" else "") +
+                ". It may allow only one connection: stop watching, then choose Try again"
+        }
+        if (f.length() < 1_000_000) return "The server sent an incomplete file. Choose Try again"
+        return null
+    }
+
     /** After a reboot or crash nothing is "running": put it back in the queue. */
     fun recover(context: Context) {
+        // Earlier builds could mark a server error reply as "downloaded": flag those so they can be retried.
+        val broken = all().filter { it.status == DONE && badFileReason(File(it.file)) != null }
+        if (broken.isNotEmpty()) save(all().map { d ->
+            if (broken.any { it.id == d.id }) {
+                val why = badFileReason(File(d.file)) ?: ""
+                File(d.file).delete()
+                d.copy(status = FAILED, total = 0, note = why)
+            } else d
+        })
         if (all().any { it.status == RUNNING }) {
             save(all().map { if (it.status == RUNNING) it.copy(status = QUEUED) else it })
         }
@@ -181,6 +216,10 @@ class DownloadService : Service() {
                 val req = Request.Builder().url(item.url).apply { if (have > 0) header("Range", "bytes=$have-") }.build()
                 client.newCall(req).execute().use { resp ->
                     if (resp.code == 416) return@use // already complete
+                    if (resp.code in listOf(401, 403, 429, 456, 458, 509, 512, 513)) {
+                        failures = 99 // retrying straight away won't help
+                        throw java.io.IOException("Your provider refused (HTTP ${resp.code}). It may allow only one connection: stop watching, then choose Try again")
+                    }
                     if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
                     val body = resp.body ?: throw java.io.IOException("Empty response")
                     val partial = resp.code == 206
@@ -212,17 +251,21 @@ class DownloadService : Service() {
                 break
             } catch (e: Exception) {
                 failures++
-                Downloads.update(item.id) { it.copy(note = "Retrying: ${e.message}") }
-                delay(4000L * failures)
+                val msg = e.message ?: "network error"
+                Downloads.update(item.id) { it.copy(note = if (failures >= 8) msg else "Retrying: $msg") }
+                if (failures < 8) delay(4000L * failures)
             }
         }
         Downloads.progress.remove(item.id)
         val size = file.length()
-        val ok = size > 0 && (total <= 0 || size >= total)
+        val complete = size > 0 && (total <= 0 || size >= total)
+        val bad = if (complete) Downloads.badFileReason(file) else null
+        val ok = complete && bad == null
+        if (bad != null) file.delete()
         Downloads.update(item.id) {
             if (it.status != Downloads.RUNNING) it
-            else it.copy(status = if (ok) Downloads.DONE else Downloads.FAILED, total = if (ok) size else total,
-                note = if (ok) "" else it.note.ifBlank { "Download failed" })
+            else it.copy(status = if (ok) Downloads.DONE else Downloads.FAILED, total = if (ok) size else 0,
+                note = if (ok) "" else bad ?: it.note.removePrefix("Retrying: ").ifBlank { "Download failed" })
         }
     }
 
