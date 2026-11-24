@@ -26,6 +26,12 @@ class SeriesDetailActivity : AppCompatActivity() {
     private lateinit var episodeAdapter: SimpleAdapter<Episode>
     private var seasons: Map<Int, List<Episode>> = emptyMap()
 
+    private fun epTitle(series: String, e: Episode) = "$series – S${e.season}E${e.num} ${e.title}"
+
+    /** Downloaded episodes play offline. */
+    private fun playUrl(e: Episode): String =
+        com.streambox.tv.data.Downloads.offlineFile(key(e))?.let { android.net.Uri.fromFile(it).toString() } ?: e.url
+
     private fun key(e: Episode) = "ep_${Repo.userKey}_${e.id}"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +57,17 @@ class SeriesDetailActivity : AppCompatActivity() {
         if (s.genre.isNotBlank()) parts.add(s.genre)
         findViewById<TextView>(R.id.meta).text = parts.joinToString("   •   ")
 
+        findViewById<android.widget.Button>(R.id.btnDownload).setOnClickListener {
+            val list = episodeAdapter.items
+            if (list.isEmpty()) return@setOnClickListener
+            var added = 0
+            for (e in list) {
+                Prefs.setEpisodeSeries(key(e), s.id)
+                if (com.streambox.tv.data.Downloads.add(this, key(e), epTitle(s.name, e), s.poster, e.url)) added++
+            }
+            toast(if (added > 0) "$added episodes added to downloads" else "Already in downloads")
+            episodeAdapter.notifyDataSetChanged()
+        }
         val btnTrailer = findViewById<android.widget.Button>(R.id.btnTrailer)
         fun showTrailer(id: String) {
             if (id.isEmpty() || btnTrailer.visibility == View.VISIBLE) return
@@ -97,7 +114,12 @@ class SeriesDetailActivity : AppCompatActivity() {
             bind = { v, e, _ ->
                 val pos = Prefs.position(key(e))
                 val resume = if (pos > 0) "   ▶ ${Ui.duration(pos)}" else ""
-                v.findViewById<TextView>(R.id.line1).text = "${e.num}. ${e.title}$resume"
+                val dl = when (com.streambox.tv.data.Downloads.forKey(key(e))?.status) {
+                    com.streambox.tv.data.Downloads.DONE -> "   ✓ offline"
+                    null, com.streambox.tv.data.Downloads.FAILED -> ""
+                    else -> "   ⬇"
+                }
+                v.findViewById<TextView>(R.id.line1).text = "${e.num}. ${e.title}$resume$dl"
                 val sub = listOf(e.duration, e.plot).filter { it.isNotBlank() }.joinToString("  •  ")
                 val l2 = v.findViewById<TextView>(R.id.line2)
                 l2.text = sub
@@ -106,7 +128,14 @@ class SeriesDetailActivity : AppCompatActivity() {
             onClick = { _, pos ->
                 val list = episodeAdapter.items
                 list.forEach { Prefs.setEpisodeSeries(key(it), s.id) }
-                Ui.play(this, list.map { PlayItem(key(it), "${s.name} – S${it.season}E${it.num} ${it.title}", it.url, false) }, pos)
+                Ui.play(this, list.map { PlayItem(key(it), epTitle(s.name, it), playUrl(it), false) }, pos)
+            },
+            onLongClick = { e, _ ->
+                Prefs.setEpisodeSeries(key(e), s.id)
+                val added = com.streambox.tv.data.Downloads.add(this, key(e), epTitle(s.name, e), s.poster, e.url)
+                toast(if (added) "Added to downloads" else "Already in downloads")
+                episodeAdapter.refresh(episodeAdapter.items.indexOf(e))
+                true
             }
         )
         val episodesView = findViewById<RecyclerView>(R.id.episodes)

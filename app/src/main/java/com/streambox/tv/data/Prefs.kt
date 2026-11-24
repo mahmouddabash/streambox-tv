@@ -325,7 +325,7 @@ object Prefs {
             val arr = JSONArray(sp.getString("viewers_$pid", "[]"))
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                out.add(Viewer(o.getString("id"), o.optString("name"), o.optBoolean("kids")))
+                out.add(Viewer(o.getString("id"), o.optString("name"), o.optBoolean("kids"), o.optInt("av", i + 1)))
             }
         } catch (_: Exception) {
         }
@@ -334,12 +334,16 @@ object Prefs {
 
     fun saveViewers(pid: String, list: List<Viewer>) {
         val arr = JSONArray()
-        list.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("kids", it.kids)) }
+        list.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("kids", it.kids).put("av", it.avatar)) }
         sp.edit().putString("viewers_$pid", arr.toString()).apply()
     }
 
     fun currentViewer(pid: String): String = sp.getString("viewer_$pid", "") ?: ""
     fun setCurrentViewer(pid: String, id: String) = sp.edit().putString("viewer_$pid", id).apply()
+
+    var mainViewerAvatar: Int
+        get() = sp.getInt("mainAvatar", 0)
+        set(v) = sp.edit().putInt("mainAvatar", v).apply()
 
     var mainViewerName: String
         get() = sp.getString("mainViewer", "Me") ?: "Me"
@@ -412,6 +416,10 @@ object Prefs {
         }
         if (list.isNotEmpty()) saveProfiles(list)
     }
+
+    var downloadsJson: String
+        get() = sp.getString("downloads", "[]") ?: "[]"
+        set(v) = sp.edit().putString("downloads", v).apply()
 
     var lastUpdateCheck: Long
         get() = sp.getLong("lastUpdateCheck", 0L)

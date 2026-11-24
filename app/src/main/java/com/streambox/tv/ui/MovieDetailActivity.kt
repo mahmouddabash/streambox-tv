@@ -49,6 +49,25 @@ class MovieDetailActivity : AppCompatActivity() {
             updateFav()
         }
         updateFav()
+        val btnDownload = findViewById<Button>(R.id.btnDownload)
+        fun updateDownload() {
+            val d = com.streambox.tv.data.Downloads.forKey(key)
+            btnDownload.text = when (d?.status) {
+                com.streambox.tv.data.Downloads.DONE -> "✓  Downloaded"
+                null, com.streambox.tv.data.Downloads.FAILED -> "⬇  Download"
+                else -> "⬇  In downloads"
+            }
+        }
+        updateDownload()
+        btnDownload.setOnClickListener {
+            if (com.streambox.tv.data.Downloads.forKey(key)?.status.let { it != null && it != com.streambox.tv.data.Downloads.FAILED }) {
+                startActivity(android.content.Intent(this, DownloadsActivity::class.java))
+            } else {
+                com.streambox.tv.data.Downloads.add(this, key, m.name, m.poster, Repo.urlFor(m))
+                toast("Added to downloads")
+                updateDownload()
+            }
+        }
         btnPlay.requestFocus()
 
         val btnTrailer = findViewById<Button>(R.id.btnTrailer)
@@ -119,7 +138,10 @@ class MovieDetailActivity : AppCompatActivity() {
     }
 
     private fun play(fromStart: Boolean) {
-        Ui.play(this, listOf(PlayItem(key, movie.name, Repo.urlFor(movie), false)), 0, fromStart)
+        // Downloaded copy plays offline; otherwise stream.
+        val offline = com.streambox.tv.data.Downloads.offlineFile(key)
+        val url = offline?.let { android.net.Uri.fromFile(it).toString() } ?: Repo.urlFor(movie)
+        Ui.play(this, listOf(PlayItem(key, movie.name, url, false)), 0, fromStart)
     }
 
     companion object {

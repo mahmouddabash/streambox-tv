@@ -20,5 +20,6 @@ class App : Application(), coil.ImageLoaderFactory {
         Prefs.init(this)
         com.streambox.tv.data.Reminders.init(this)
         com.streambox.tv.ui.Tr.init(this)
+        com.streambox.tv.data.Downloads.recover(this)
     }
 }

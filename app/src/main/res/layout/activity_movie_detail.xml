@@ -84,6 +84,7 @@
                 <Button android:id="@+id/btnPlay" style="@style/BtnPrimary" android:drawableStart="@drawable/ic_play_btn" android:text="Play" />
                 <Button android:id="@+id/btnResume" style="@style/Btn" android:text="Resume" android:visibility="gone" />
                 <Button android:id="@+id/btnTrailer" style="@style/Btn" android:text="▶  Trailer" android:visibility="gone" />
+                <Button android:id="@+id/btnDownload" style="@style/Btn" android:text="⬇  Download" />
                 <Button android:id="@+id/btnFav" style="@style/Btn" android:text="+ My list" />
             </LinearLayout>
 

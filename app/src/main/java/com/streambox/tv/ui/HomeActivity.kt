@@ -114,6 +114,8 @@ class HomeActivity : AppCompatActivity() {
                 }
                 .show()
         }
+        val downloads = findViewById<Button>(R.id.tileDownloads)
+        downloads.setOnClickListener { startActivity(Intent(this, DownloadsActivity::class.java)) }
         val rec = findViewById<Button>(R.id.tileRec)
         rec.setOnClickListener { startActivity(Intent(this, RecordingsActivity::class.java)) }
         val settings = findViewById<Button>(R.id.tileSettings)
@@ -136,14 +138,12 @@ class HomeActivity : AppCompatActivity() {
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle(Repo.viewerName)
                 .setItems(arrayOf("👤  Switch viewer", "⇄  Switch provider profile")) { _, w ->
-                    if (w == 0) {
-                        if (Prefs.viewers(Repo.profileId).isEmpty()) toast("Add viewers in Settings → Viewers")
-                        else Ui.chooseViewer(this) { recreate() }
-                    } else Ui.guardKids(this) { finish() }
+                    if (w == 0) whoIsWatching.launch(Intent(this, ViewersActivity::class.java))
+                    else Ui.guardKids(this) { finish() }
                 }
                 .show()
         }
-        for ((b, label) in listOf(search to "Search", multi to "Multi-screen", rec to "Recordings", refresh to "Refresh content", settings to "Settings", profiles to "Switch profile")) {
+        for ((b, label) in listOf(search to "Search", multi to "Multi-screen", downloads to "Downloads", rec to "Recordings", refresh to "Refresh content", settings to "Settings", profiles to "Switch profile")) {
             b.contentDescription = label
             b.setOnFocusChangeListener { _, has -> if (has) status.text = label else if (!loading) status.text = "" }
         }
@@ -166,6 +166,11 @@ class HomeActivity : AppCompatActivity() {
     }
 
     /** First load after launch: jump on to the screen the user left the app from. */
+    /** Full-screen "Who's watching?": reload Home when the viewer changed. */
+    private val whoIsWatching = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == RESULT_OK) recreate()
+    }
+
     /** True while "Who's watching?" is open on start-up: stay on Home instead of jumping to the last screen. */
     private var askingViewer = false
 
@@ -241,7 +246,7 @@ class HomeActivity : AppCompatActivity() {
         if (!viewerAsked && Prefs.viewers(Repo.profileId).isNotEmpty()) {
             viewerAsked = true
             askingViewer = true
-            Ui.chooseViewer(this) { recreate() }
+            whoIsWatching.launch(Intent(this, ViewersActivity::class.java))
         }
         com.streambox.tv.data.Updater.showWhatsNew(this, lifecycleScope)
         com.streambox.tv.data.Updater.checkDaily(this, lifecycleScope)

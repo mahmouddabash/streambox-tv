@@ -62,6 +62,8 @@
         <activity android:name=".ui.SeriesDetailActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.EpgActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.SettingsActivity" android:screenOrientation="landscape" />
+        <activity android:name=".ui.DownloadsActivity" android:screenOrientation="landscape" />
+        <activity android:name=".ui.ViewersActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.AboutActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.RecordingsActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.MultiViewActivity" android:screenOrientation="landscape" android:theme="@style/PlayerTheme" />
@@ -81,6 +83,10 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+        <service
+            android:name=".data.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <service
             android:name=".data.RecordingService"
             android:exported="false"
