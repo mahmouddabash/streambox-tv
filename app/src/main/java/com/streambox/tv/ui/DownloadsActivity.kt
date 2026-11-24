@@ -63,7 +63,8 @@ class DownloadsActivity : AppCompatActivity() {
                 val size = if (d.total > 0) "${gb(have)} / ${gb(d.total)}" else gb(have)
                 val pct = if (d.total > 0) " ${(have * 100 / d.total).coerceIn(0, 100)}%  •" else ""
                 val state = when (d.status) {
-                    Downloads.DONE -> "Ready to watch offline   •   ${gb(d.total.coerceAtLeast(have))}"
+                    Downloads.DONE -> "Ready to watch offline   •   ${gb(d.total.coerceAtLeast(have))}" +
+                        if (Downloads.indexingId == d.id) "   •   " + Tr.s("preparing fast jumps…") else ""
                     Downloads.RUNNING -> "Downloading$pct  $size"
                     Downloads.PAUSED -> "Paused  •  $size"
                     Downloads.FAILED -> "Failed" + if (d.note.isNotBlank()) "  •  ${d.note}" else ""

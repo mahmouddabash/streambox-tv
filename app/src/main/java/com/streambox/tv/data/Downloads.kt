@@ -103,7 +103,18 @@ object Downloads {
     }
 
     /** The file plus its helper files (progress, index). */
-    fun companions(path: String) = listOf(path, "$path.hls", "$path.idx", "$path.m3u8")
+    fun companions(path: String) = listOf(path, "$path.hls", "$path.idx", "$path.m3u8", "$path.m3u8.tmp", "$path.noidx")
+
+    /** Download whose keyframe index is being built right now (shown in the list). */
+    @Volatile
+    var indexingId: String? = null
+
+    /** A finished TS download that still needs its keyframe index (made once, in the background). */
+    fun needsIndex(d: Item): Boolean {
+        if (d.status != DONE) return false
+        val f = File(d.file)
+        return f.exists() && !File(d.file + ".noidx").exists() && !TsIndex.hasIndex(f) && TsIndex.isTs(f)
+    }
 
     fun bytes(item: Item): Long = progress[item.id] ?: File(item.file).length()
 
@@ -225,7 +236,7 @@ object Downloads {
         }
         val hls = all().filter { it.status == FAILED && it.note.startsWith("Your server sends this title as a live stream playlist") }
         if (hls.isNotEmpty()) save(all().map { d -> if (hls.any { it.id == d.id }) d.copy(status = QUEUED, note = "", total = 0) else d })
-        if (all().any { it.status == QUEUED }) DownloadService.start(context)
+        if (all().any { it.status == QUEUED || needsIndex(it) }) DownloadService.start(context)
     }
 }
 
@@ -250,8 +261,14 @@ class DownloadService : Service() {
 
     private suspend fun runQueue() {
         while (scope.isActive) {
-            val next = Downloads.all().firstOrNull { it.status == Downloads.QUEUED } ?: break
-            download(next)
+            val next = Downloads.all().firstOrNull { it.status == Downloads.QUEUED }
+            if (next != null) {
+                download(next)
+                continue
+            }
+            // Nothing to download: index finished files so jumps inside them are instant.
+            val ix = Downloads.all().firstOrNull { Downloads.needsIndex(it) } ?: break
+            buildIndex(ix)
         }
         if (android.os.Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
         stopSelf()
@@ -358,6 +375,33 @@ class DownloadService : Service() {
             sb.append("#EXT-X-ENDLIST\n")
             File(file.path + ".m3u8").writeText(sb.toString())
             idx.delete()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun buildIndex(d: Downloads.Item) {
+        val f = File(d.file)
+        Downloads.indexingId = d.id
+        updateNotificationText("Preparing fast jumps: ${d.title}")
+        val ok = try {
+            TsIndex.build(f) { scope.isActive && Downloads.get(d.id)?.status == Downloads.DONE }
+        } catch (_: Exception) {
+            false
+        }
+        Downloads.indexingId = null
+        File(d.file + ".m3u8.tmp").delete()
+        // Couldn't index (not a normal TS file): don't try again; it still plays as before.
+        if (!ok && scope.isActive && Downloads.get(d.id) != null) {
+            try {
+                File(d.file + ".noidx").writeText("1")
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun updateNotificationText(text: String) {
+        try {
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(ID, notification(text))
         } catch (_: Exception) {
         }
     }
@@ -544,7 +588,7 @@ class DownloadService : Service() {
                 }
             }
             side.delete()
-            writeLocalPlaylist(file, idx, mapLen, segs.size)
+            idx.delete() // the keyframe scan (after the download) makes a more precise index
             Downloads.progress.remove(item.id)
             val size = file.length()
             val bad = if (size < 1_000_000) "The server sent an incomplete file. Choose Try again" else null

@@ -404,6 +404,7 @@ object Tr {
         "Delete all downloads?" to "حذف كل التنزيلات؟",
         "Removes every download from the list and deletes the files from the TV and any USB drive, including leftover files. This can't be undone." to "يزيل كل التنزيلات من القائمة ويحذف ملفاتها من التلفاز وأي وحدة USB، بما في ذلك الملفات المتبقية. لا يمكن التراجع عن ذلك.",
         "file missing" to "الملف غير موجود",
+        "preparing fast jumps…" to "جارٍ تجهيز التقديم السريع…",
         "Nothing downloaded yet" to "لا توجد تنزيلات بعد",
         "Cancel" to "إلغاء",
         "Select all" to "تحديد الكل",
