@@ -94,7 +94,7 @@ object Updater {
                 else -> AlertDialog.Builder(activity)
                     .setTitle("Update available")
                     .setMessage("Build ${r.build} is ready (you have build $currentBuild).\nInstall it now? Your profiles and settings are kept.")
-                    .setPositiveButton("Install with Downloader") { _, _ -> openInDownloader(activity) }
+                    .setPositiveButton("Install with Downloader") { _, _ -> openInDownloader(activity, r.apkUrl) }
                     .setNeutralButton("Install now") { _, _ -> download(activity, scope, r) }
                     .setNegativeButton("Later", null)
                     .show()
@@ -276,9 +276,11 @@ object Updater {
      * Hands the newest APK link to the Downloader app (already allowed to install on most TVs).
      * If Downloader can't take the link directly, it is opened and the address is shown to type in.
      */
-    fun openInDownloader(activity: Activity) {
+    fun openInDownloader(activity: Activity, exactUrl: String? = null) {
         val pm = activity.packageManager
-        val direct = Intent(Intent.ACTION_VIEW, Uri.parse(LINK)).setPackage(DOWNLOADER).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // A link unique to this version, so Downloader can't reuse an older file it saved before.
+        val url = exactUrl ?: "$LINK?b=${System.currentTimeMillis() / 60000}"
+        val direct = Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(DOWNLOADER).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             activity.startActivity(direct)
             return
