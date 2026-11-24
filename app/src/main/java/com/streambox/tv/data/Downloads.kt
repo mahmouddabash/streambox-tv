@@ -96,6 +96,15 @@ object Downloads {
     fun offlineFile(key: String): File? =
         forKey(key)?.takeIf { it.status == DONE }?.let { File(it.file) }?.takeIf { it.exists() && it.length() > 0 }
 
+    /** What to play for a download: its seek index (.m3u8) when there is one, else the file itself. */
+    fun playUri(f: File): String {
+        val index = File(f.path + ".m3u8")
+        return android.net.Uri.fromFile(if (index.exists()) index else f).toString()
+    }
+
+    /** The file plus its helper files (progress, index). */
+    fun companions(path: String) = listOf(path, "$path.hls", "$path.idx", "$path.m3u8")
+
     fun bytes(item: Item): Long = progress[item.id] ?: File(item.file).length()
 
     /** Folders downloads can go to: TV storage first, then any USB drive / SD card. */
@@ -145,8 +154,7 @@ object Downloads {
         val item = get(id) ?: return
         save(all().filterNot { it.id == id })
         progress.remove(id)
-        File(item.file).delete()
-        File(item.file + ".hls").delete()
+        companions(item.file).forEach { File(it).delete() }
         DownloadService.start(context)
     }
 
@@ -187,13 +195,12 @@ object Downloads {
         gone.forEach {
             progress.remove(it.id)
             try {
-                File(it.file).delete()
-                File(it.file + ".hls").delete()
+                companions(it.file).forEach { p -> File(p).delete() }
             } catch (_: Exception) {
             }
         }
         if (cleanLeftovers) {
-            val keep = all().flatMap { listOf(it.file, it.file + ".hls") }.toSet()
+            val keep = all().flatMap { companions(it.file) }.toSet()
             dirs(context).forEach { d ->
                 d.listFiles()?.forEach { f -> if (f.isFile && f.absolutePath !in keep) f.delete() }
             }
@@ -332,6 +339,29 @@ class DownloadService : Service() {
         }
     }
 
+    /**
+     * Writes "<file>.m3u8": an HLS playlist that points at byte ranges of the joined file, one per
+     * original piece. Playing that instead of the raw file makes jumps land exactly on a full picture.
+     */
+    private fun writeLocalPlaylist(file: File, idx: File, mapLen: Long, count: Int) {
+        try {
+            val rows = idx.readLines().filter { it.isNotBlank() }.map { it.split(' ') }
+            if (rows.size != count || rows.isEmpty()) return
+            val target = kotlin.math.ceil(rows.maxOf { it[0].toDoubleOrNull() ?: 0.0 }).toInt().coerceAtLeast(1)
+            val name = file.name
+            val sb = StringBuilder("#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-TARGETDURATION:$target\n#EXT-X-MEDIA-SEQUENCE:0\n")
+            if (mapLen > 0) sb.append("#EXT-X-MAP:URI=\"$name\",BYTERANGE=\"$mapLen@0\"\n")
+            for (r in rows) {
+                if (r.size < 3 || (r[0].toDoubleOrNull() ?: 0.0) <= 0.0) return // durations unknown: play the plain file
+                sb.append("#EXTINF:${r[0]},\n#EXT-X-BYTERANGE:${r[2]}@${r[1]}\n$name\n")
+            }
+            sb.append("#EXT-X-ENDLIST\n")
+            File(file.path + ".m3u8").writeText(sb.toString())
+            idx.delete()
+        } catch (_: Exception) {
+        }
+    }
+
     private fun isPlaylist(f: File): Boolean = try {
         f.inputStream().use { val b = ByteArray(64); val n = it.read(b); n > 0 && String(b, 0, n, Charsets.ISO_8859_1).trimStart('\uFEFF', ' ', '\r', '\n').startsWith("#EXTM3U") }
     } catch (_: Exception) {
@@ -357,7 +387,7 @@ class DownloadService : Service() {
         }
     }
 
-    private class Seg(val url: String, val keyUrl: String?, val iv: ByteArray?, val seq: Long)
+    private class Seg(val url: String, val keyUrl: String?, val iv: ByteArray?, val seq: Long, val dur: Double)
 
     private fun attrs(line: String): Map<String, String> {
         val out = HashMap<String, String>()
@@ -420,6 +450,7 @@ class DownloadService : Service() {
             var keyUrl: String? = null
             var iv: ByteArray? = null
             var mapUrl: String? = null
+            var dur = 0.0
             for (raw in text.lines()) {
                 val line = raw.trim()
                 when {
@@ -437,26 +468,38 @@ class DownloadService : Service() {
                             else -> throw java.io.IOException("This title is copy-protected and can't be saved")
                         }
                     }
+                    line.startsWith("#EXTINF:") -> dur = line.substringAfter(':').substringBefore(',').trim().toDoubleOrNull() ?: 0.0
                     line.startsWith("#EXT-X-MAP:") -> mapUrl = attrs(line)["URI"]?.let { resolve(url, it) }
-                    line.isNotEmpty() && !line.startsWith("#") -> segs.add(Seg(resolve(url, line), keyUrl, iv, seq++))
+                    line.isNotEmpty() && !line.startsWith("#") -> segs.add(Seg(resolve(url, line), keyUrl, iv, seq++, dur))
                 }
             }
             if (segs.isEmpty()) throw java.io.IOException("The playlist is empty")
 
             // Where we stopped last time: "<next piece> <bytes written>".
             var index = 0
+            // "<file>.idx": where each piece sits in the joined file, for fast and exact seeking offline.
+            val idx = File(file.path + ".idx")
+            var mapLen = 0L
             if (side.exists() && file.exists()) {
                 val parts = side.readText().trim().split(' ')
                 index = parts.getOrNull(0)?.toIntOrNull() ?: 0
                 val len = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                mapLen = parts.getOrNull(2)?.toLongOrNull() ?: 0L
                 RandomAccessFile(file, "rw").use { it.setLength(len) }
+                val kept = if (idx.exists()) idx.readLines().filter { it.isNotBlank() }.take(index) else emptyList()
+                if (kept.size == index) idx.writeText(kept.joinToString("") { "$it\n" }) else idx.delete()
             } else {
                 file.delete()
-                side.writeText("0 0")
+                idx.delete()
+                side.writeText("0 0 0")
             }
             val keys = HashMap<String, ByteArray>()
             java.io.FileOutputStream(file, true).use { out ->
-                if (index == 0 && mapUrl != null) fetch(mapUrl!!).use { r -> r.body?.byteStream()?.copyTo(out) }
+                if (index == 0 && mapUrl != null) {
+                    fetch(mapUrl!!).use { r -> r.body?.byteStream()?.copyTo(out) }
+                    out.flush()
+                    mapLen = file.length()
+                }
                 // Several pieces at once is much faster; if the provider objects, go one at a time.
                 var parallel = PARALLEL
                 while (index < segs.size) {
@@ -485,12 +528,15 @@ class DownloadService : Service() {
                             c.init(javax.crypto.Cipher.DECRYPT_MODE, javax.crypto.spec.SecretKeySpec(k, "AES"), javax.crypto.spec.IvParameterSpec(ivBytes))
                             bytes = c.doFinal(bytes)
                         }
+                        val at = file.length()
                         out.write(bytes)
+                        out.flush()
+                        idx.appendText("${s.dur} $at ${bytes.size}\n")
                     }
                     out.flush()
                     index += batch.size
                     val len = file.length()
-                    side.writeText("$index $len")
+                    side.writeText("$index $len $mapLen")
                     Downloads.progress[item.id] = len
                     val estimate = len * segs.size / index
                     Downloads.update(item.id) { it.copy(total = estimate, note = if (parallel == 1 && it.note.startsWith("Your provider")) it.note else "") }
@@ -498,6 +544,7 @@ class DownloadService : Service() {
                 }
             }
             side.delete()
+            writeLocalPlaylist(file, idx, mapLen, segs.size)
             Downloads.progress.remove(item.id)
             val size = file.length()
             val bad = if (size < 1_000_000) "The server sent an incomplete file. Choose Try again" else null

@@ -140,7 +140,7 @@ class MovieDetailActivity : AppCompatActivity() {
     private fun play(fromStart: Boolean) {
         // Downloaded copy plays offline; otherwise stream.
         val offline = com.streambox.tv.data.Downloads.offlineFile(key)
-        val url = offline?.let { android.net.Uri.fromFile(it).toString() } ?: Repo.urlFor(movie)
+        val url = offline?.let { com.streambox.tv.data.Downloads.playUri(it) } ?: Repo.urlFor(movie)
         Ui.play(this, listOf(PlayItem(key, movie.name, url, false)), 0, fromStart)
     }
 

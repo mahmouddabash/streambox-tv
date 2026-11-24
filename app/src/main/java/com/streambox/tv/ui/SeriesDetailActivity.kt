@@ -35,7 +35,7 @@ class SeriesDetailActivity : AppCompatActivity() {
 
     /** Downloaded episodes play offline. */
     private fun playUrl(e: Episode): String =
-        com.streambox.tv.data.Downloads.offlineFile(key(e))?.let { android.net.Uri.fromFile(it).toString() } ?: e.url
+        com.streambox.tv.data.Downloads.offlineFile(key(e))?.let { com.streambox.tv.data.Downloads.playUri(it) } ?: e.url
 
     private fun key(e: Episode) = "ep_${Repo.userKey}_${e.id}"
 

@@ -169,7 +169,7 @@ class DownloadsActivity : AppCompatActivity() {
         val actions = ArrayList<Pair<String, () -> Unit>>()
         val file = File(d.file)
         if (d.status == Downloads.DONE && file.exists()) actions.add("▶  Play" to {
-            Ui.play(this, listOf(PlayItem(d.key, d.title, Uri.fromFile(file).toString(), false)), 0)
+            Ui.play(this, listOf(PlayItem(d.key, d.title, Downloads.playUri(file), false)), 0)
         })
         when (d.status) {
             Downloads.RUNNING, Downloads.QUEUED -> actions.add("⏸  Pause" to { Downloads.pause(this, d.id); reload() })

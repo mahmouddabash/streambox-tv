@@ -316,6 +316,14 @@ class PlayerActivity : AppCompatActivity() {
         PlayerFactory.styleSubtitles(playerView)
         p.addListener(listener)
         p.addAnalyticsListener(analytics)
+        p.setVideoFrameMetadataListener { presentationTimeUs, _, _, _ ->
+            // Only the first picture that belongs to the jump (older pictures may still be on their way out).
+            val ms = presentationTimeUs / 1000
+            if (watchSeek && ms >= seekTargetMs - 1_000 && ms <= seekTargetMs + 20_000) {
+                watchSeek = false
+                handler.post { alignAfterSeek(ms) }
+            }
+        }
         handler.removeCallbacks(watchdog)
         handler.postDelayed(watchdog, 3000)
         if (statsOn) {
@@ -785,7 +793,37 @@ class PlayerActivity : AppCompatActivity() {
             .show()
     }
 
+    // ---------------------------------------------------------------- Jump alignment
+    // A jump usually lands between two full pictures (keyframes): the sound starts at once but the
+    // picture stays frozen until the next keyframe. After a jump we look at the first picture shown
+    // and, if it is ahead of the clock, move the clock to it so picture and sound start together.
+    @Volatile
+    private var watchSeek = false
+    @Volatile
+    private var seekTargetMs = 0L
+    private var aligning = false
+
+    private fun alignAfterSeek(frameMs: Long) {
+        val p = player ?: return
+        if (aligning || current.isLive) return
+        val gap = frameMs - p.currentPosition
+        if (gap !in 350L..15_000L) return
+        aligning = true
+        p.setSeekParameters(androidx.media3.exoplayer.SeekParameters.EXACT)
+        p.seekTo(frameMs)
+        p.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+        handler.postDelayed({ aligning = false }, 2500)
+    }
+
     private val listener = object : Player.Listener {
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK && !aligning && !current.isLive) {
+                seekTargetMs = newPosition.positionMs
+                watchSeek = true
+                handler.postDelayed({ watchSeek = false }, 10_000)
+            }
+        }
+
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_READY) {
                 retries = 0
