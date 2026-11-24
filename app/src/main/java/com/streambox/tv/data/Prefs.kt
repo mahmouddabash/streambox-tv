@@ -41,6 +41,7 @@ object Prefs {
      * When the built-in login changes, an existing default profile is updated in place.
      */
     private fun seedDefaultProfile(context: Context) {
+        if (!Secret.BUILT_IN) return
         val version = 2
         if (sp.getInt("defaultSeedVersion", if (sp.getBoolean("defaultSeeded", false)) 1 else 0) >= version) return
         val list = profiles()

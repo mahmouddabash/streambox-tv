@@ -248,8 +248,11 @@ class HomeActivity : AppCompatActivity() {
             askingViewer = true
             whoIsWatching.launch(Intent(this, ViewersActivity::class.java))
         }
-        com.streambox.tv.data.Updater.showWhatsNew(this, lifecycleScope)
-        com.streambox.tv.data.Updater.checkDaily(this, lifecycleScope)
+        // The Play Store build is updated by Google Play, never by the app itself.
+        if (com.streambox.tv.BuildConfig.SELF_UPDATE) {
+            com.streambox.tv.data.Updater.showWhatsNew(this, lifecycleScope)
+            com.streambox.tv.data.Updater.checkDaily(this, lifecycleScope)
+        }
         val first = rows.firstOrNull()?.cards?.firstOrNull()
         if (first != null) {
             showHero(first, rows[0].title)

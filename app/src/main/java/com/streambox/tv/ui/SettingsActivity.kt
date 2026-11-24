@@ -65,7 +65,7 @@ class SettingsActivity : AppCompatActivity() {
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
             }
         })
-        rows.add(Row("Check for updates", "Installed: build ${com.streambox.tv.data.Updater.currentBuild}. Checked automatically once a day") {
+        if (com.streambox.tv.BuildConfig.SELF_UPDATE) rows.add(Row("Check for updates", "Installed: build ${com.streambox.tv.data.Updater.currentBuild}. Checked automatically once a day") {
             com.streambox.tv.data.Updater.check(this, lifecycleScope, quiet = false)
         })
         rows.add(Row("Picture mode", PictureMode.of(Prefs.pictureMode).label) {

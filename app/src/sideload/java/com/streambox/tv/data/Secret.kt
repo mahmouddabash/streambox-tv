@@ -5,6 +5,8 @@ import java.security.MessageDigest
 
 /** Keeps the built-in login out of plain text and checks the profile password without storing it. */
 object Secret {
+    /** This (sideload) build ships the owner's built-in login; the Play build doesn't. */
+    const val BUILT_IN = true
     private val KEY = "StreamBox#2026~tv".toByteArray()
 
     internal const val DEFAULT_SERVER = "OwAGFVtCbQIQQkQBHFURGUxhREtQ"

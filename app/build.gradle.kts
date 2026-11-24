@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.streambox.tv"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.streambox.tv"
         minSdk = 23
-        targetSdk = 35
+        targetSdk = 36
         // CI build number = version, so the app can tell when a newer release exists.
         val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionCode = build
@@ -37,6 +37,27 @@ android {
                 keyPassword = System.getenv("SB_KEYSTORE_PASSWORD")
             }
         }
+    }
+
+    // Two editions from the same code:
+    //  • sideload – the APK installed with Downloader; updates itself from GitHub, includes the built-in login.
+    //  • play     – the Android App Bundle (.aab) for Google Play; no self-updater, no built-in login,
+    //               no install-other-apps or exact-alarm permissions (Play policy).
+    flavorDimensions += "store"
+    productFlavors {
+        create("sideload") {
+            dimension = "store"
+            isDefault = true
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+        }
+        create("play") {
+            dimension = "store"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+        }
+    }
+    bundle {
+        // Keep every language in the download: the app switches Arabic/English itself.
+        language { enableSplit = false }
     }
 
     buildTypes {
