@@ -15,11 +15,11 @@ android {
         val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionCode = build
         versionName = "1.0.$build"
+        buildConfigField("boolean", "SELF_UPDATE", "true")
     }
 
-    // Release key: the private key from the SB_SIGNING repository secret (decoded by CI into
-    // SB_KEYSTORE_FILE / SB_KEYSTORE_PASSWORD). It is never stored in the repository.
-    // Until that secret exists, builds fall back to the old public key so they still install.
+    // Signed with the same key as every earlier build, so each update installs over the last one.
+    // (Optional: an SB_SIGNING repository secret switches to a private key.)
     val privateKey = System.getenv("SB_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
     signingConfigs {
         getByName("debug") {
@@ -37,27 +37,6 @@ android {
                 keyPassword = System.getenv("SB_KEYSTORE_PASSWORD")
             }
         }
-    }
-
-    // Two editions from the same code:
-    //  • sideload – the APK installed with Downloader; updates itself from GitHub, includes the built-in login.
-    //  • play     – the Android App Bundle (.aab) for Google Play; no self-updater, no built-in login,
-    //               no install-other-apps or exact-alarm permissions (Play policy).
-    flavorDimensions += "store"
-    productFlavors {
-        create("sideload") {
-            dimension = "store"
-            isDefault = true
-            buildConfigField("boolean", "SELF_UPDATE", "true")
-        }
-        create("play") {
-            dimension = "store"
-            buildConfigField("boolean", "SELF_UPDATE", "false")
-        }
-    }
-    bundle {
-        // Keep every language in the download: the app switches Arabic/English itself.
-        language { enableSplit = false }
     }
 
     buildTypes {

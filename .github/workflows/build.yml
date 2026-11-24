@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - name: Unit tests
-        run: ./gradlew testSideloadReleaseUnitTest --stacktrace
+        run: ./gradlew testReleaseUnitTest --stacktrace
       - name: Private signing key (repository secret SB_SIGNING = "password:base64-keystore")
         env:
           SB_SIGNING: ${{ secrets.SB_SIGNING }}
@@ -32,15 +32,13 @@ jobs:
             echo "SB_KEYSTORE_PASSWORD=${SB_SIGNING%%:*}" >> "$GITHUB_ENV"
             echo "Signing with the private release key"
           else
-            echo "::warning::SB_SIGNING secret not set - signing with the old public key"
+            echo "Signing with the standard StreamBox key"
           fi
       - name: Lint (errors fail the build)
-        run: ./gradlew lintSideloadRelease lintPlayRelease --stacktrace
-      - name: Build the APK (Downloader) and the App Bundle (Google Play)
-        run: ./gradlew assembleSideloadRelease bundlePlayRelease --stacktrace
-      - run: |
-          cp app/build/outputs/apk/sideload/release/app-sideload-release.apk StreamBoxTV.apk
-          cp app/build/outputs/bundle/playRelease/app-play-release.aab StreamBoxTV-GooglePlay.aab
+        run: ./gradlew lintRelease --stacktrace
+      - name: Build optimized release APK
+        run: ./gradlew assembleRelease --stacktrace
+      - run: cp app/build/outputs/apk/release/app-release.apk StreamBoxTV.apk
       - name: Checksum for the in-app updater
         run: sha256sum StreamBoxTV.apk > StreamBoxTV.apk.sha256
       - name: Remove the key from the runner
@@ -56,9 +54,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: StreamBoxTV-apk
-          path: |
-            StreamBoxTV.apk
-            StreamBoxTV-GooglePlay.aab
+          path: StreamBoxTV.apk
 
       # Publish a Release so the APK has a permanent one-tap link:
       # https://github.com/mahmouddabash/streambox-tv/releases/latest/download/StreamBoxTV.apk
@@ -70,5 +66,4 @@ jobs:
           files: |
             StreamBoxTV.apk
             StreamBoxTV.apk.sha256
-            StreamBoxTV-GooglePlay.aab
           make_latest: true
