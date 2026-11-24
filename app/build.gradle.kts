@@ -5,26 +5,37 @@ plugins {
 
 android {
     namespace = "com.streambox.tv"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.streambox.tv"
         minSdk = 23
-        targetSdk = 34
+        targetSdk = 35
         // CI build number = version, so the app can tell when a newer release exists.
         val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionCode = build
         versionName = "1.0.$build"
     }
 
-    // Fixed key committed to the repo so every CI build has the same signature
-    // and installs over the previous one without an uninstall.
+    // Release key: the private key from the SB_SIGNING repository secret (decoded by CI into
+    // SB_KEYSTORE_FILE / SB_KEYSTORE_PASSWORD). It is never stored in the repository.
+    // Until that secret exists, builds fall back to the old public key so they still install.
+    val privateKey = System.getenv("SB_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
     signingConfigs {
         getByName("debug") {
             storeFile = file("streambox.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        create("private") {
+            if (privateKey != null) {
+                storeFile = privateKey
+                storeType = "pkcs12"
+                storePassword = System.getenv("SB_KEYSTORE_PASSWORD")
+                keyAlias = "streambox"
+                keyPassword = System.getenv("SB_KEYSTORE_PASSWORD")
+            }
         }
     }
 
@@ -35,7 +46,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (privateKey != null) "private" else "debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -53,8 +64,11 @@ android {
         jvmTarget = "17"
     }
     lint {
-        abortOnError = false
-        checkReleaseBuilds = false
+        // Real errors fail the build; style warnings don't.
+        abortOnError = true
+        checkReleaseBuilds = true
+        checkDependencies = false
+        disable += setOf("MissingTranslation", "ExtraTranslation", "IconMissingDensityFolder", "ObsoleteSdkInt", "GradleDependency", "OldTargetApi")
     }
 }
 
@@ -65,12 +79,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
-    implementation("androidx.media3:media3-datasource-okhttp:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
-    implementation("androidx.media3:media3-effect:1.4.1")
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
+    implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("androidx.media3:media3-effect:1.5.1")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")

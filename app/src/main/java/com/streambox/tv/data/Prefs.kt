@@ -65,16 +65,23 @@ object Prefs {
     @Volatile
     private var profileCache: List<Profile>? = null
 
-    /** Profiles JSON: encrypted when possible; older plain-text saves are encrypted on first read. */
+    /**
+     * Profiles JSON. Logins are only ever stored encrypted; a plain-text copy left by an old build
+     * is encrypted on first read and then deleted.
+     */
     private fun profilesJson(): String {
         val enc = sp.getString("profiles_enc", null)
         if (enc != null) Vault.decrypt(enc)?.let { return it }
-        val plain = sp.getString("profiles", "[]") ?: "[]"
-        if (enc == null && plain != "[]") {
-            Vault.encrypt(plain)?.let { sp.edit().putString("profiles_enc", it).remove("profiles").apply() }
-        }
+        val plain = sp.getString("profiles", null) ?: return "[]"
+        Vault.encryptOrRepair(plain)?.let { sp.edit().putString("profiles_enc", it).remove("profiles").apply() }
+            ?: sp.edit().remove("profiles").apply()
         return plain
     }
+
+    /** True when the last save couldn't be encrypted, so logins are kept only until the app closes. */
+    @Volatile
+    var profilesNotSaved = false
+        private set
 
     fun profiles(): List<Profile> {
         profileCache?.let { return it }
@@ -114,9 +121,11 @@ object Prefs {
         }
         profileCache = list
         val json = arr.toString()
-        val enc = Vault.encrypt(json)
+        // Never written to disk unencrypted: if the TV can't encrypt, keep them in memory only.
+        val enc = Vault.encryptOrRepair(json)
+        profilesNotSaved = enc == null
         if (enc != null) sp.edit().putString("profiles_enc", enc).remove("profiles").apply()
-        else sp.edit().putString("profiles", json).remove("profiles_enc").apply()
+        else sp.edit().remove("profiles").apply()
     }
 
     fun addProfile(p: Profile) = saveProfiles(profiles() + p)

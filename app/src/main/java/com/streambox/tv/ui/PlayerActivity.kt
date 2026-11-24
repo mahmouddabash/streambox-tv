@@ -126,6 +126,115 @@ class PlayerActivity : AppCompatActivity() {
 
     private val current: PlayItem get() = items[index]
 
+    // ---------------------------------------------------------------- Freeze watchdog
+    // Some IPTV servers stop sending data without closing the connection: the picture freezes or
+    // spins forever with no error. Every 3 s we check; if nothing moves we reconnect on our own.
+    private var lastPos = -1L
+    private var stuckMs = 0L
+    private var stallReconnects = 0
+    private val watchdog = object : Runnable {
+        override fun run() {
+            val p = player ?: return
+            if (p.playWhenReady && !failed) {
+                val buffering = p.playbackState == Player.STATE_BUFFERING
+                val frozen = p.playbackState == Player.STATE_READY && p.isPlaying && p.currentPosition == lastPos
+                stuckMs = if (buffering || frozen) stuckMs + 3000 else 0
+                if (stuckMs >= (if (buffering) 15_000 else 9_000)) {
+                    stuckMs = 0
+                    reconnectFrozen()
+                }
+            } else stuckMs = 0
+            lastPos = p.currentPosition
+            handler.postDelayed(this, 3000)
+        }
+    }
+
+    private fun reconnectFrozen() {
+        val p = player ?: return
+        if (stallReconnects >= 4) return
+        stallReconnects++
+        errorView.text = "The picture stopped. Reconnecting…"
+        errorView.visibility = View.VISIBLE
+        startPos = if (current.isLive) 0L else p.currentPosition
+        load(attemptUrl, attemptMime)
+    }
+
+    // ---------------------------------------------------------------- Stats overlay
+    private var statsOn = false
+    private var statsView: TextView? = null
+    private var bandwidthBps = 0L
+    private var droppedFrames = 0
+    private val analytics = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+        override fun onBandwidthEstimate(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long
+        ) {
+            bandwidthBps = bitrateEstimate
+        }
+
+        override fun onDroppedVideoFrames(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            dropped: Int, elapsedMs: Long
+        ) {
+            droppedFrames += dropped
+        }
+    }
+    private val statsTicker = object : Runnable {
+        override fun run() {
+            updateStats()
+            if (statsOn) handler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun toggleStats() {
+        statsOn = !statsOn
+        if (statsView == null) {
+            statsView = TextView(this).apply {
+                textSize = 13f
+                setTextColor(0xFFFFFFFF.toInt())
+                typeface = android.graphics.Typeface.MONOSPACE
+                setPadding(24, 16, 24, 16)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = 18f
+                    setColor(0xB0000000.toInt())
+                }
+            }
+            (playerView.parent as android.widget.FrameLayout).addView(
+                statsView,
+                android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.TOP or android.view.Gravity.END)
+                    .apply { setMargins(0, 40, 40, 0) }
+            )
+        }
+        statsView?.visibility = if (statsOn) View.VISIBLE else View.GONE
+        handler.removeCallbacks(statsTicker)
+        if (statsOn) handler.post(statsTicker)
+    }
+
+    private fun updateStats() {
+        val p = player ?: return
+        val v = p.videoFormat
+        val a = p.audioFormat
+        fun mbps(b: Long) = if (b <= 0) "–" else String.format(java.util.Locale.US, "%.1f Mbps", b / 1_000_000.0)
+        val state = when (p.playbackState) {
+            Player.STATE_BUFFERING -> "Buffering"
+            Player.STATE_READY -> if (p.isPlaying) "Playing" else "Paused"
+            Player.STATE_ENDED -> "Ended"
+            else -> "Idle"
+        }
+        val lines = listOf(
+            "State      $state",
+            "Video      " + (if (v == null) "–" else "${v.width}×${v.height}" +
+                (if (v.frameRate > 0) String.format(java.util.Locale.US, " @ %.0f fps", v.frameRate) else "")),
+            "Codec      " + (v?.sampleMimeType?.substringAfter('/') ?: "–") + " / " + (a?.sampleMimeType?.substringAfter('/') ?: "–"),
+            "Bitrate    " + mbps(v?.bitrate?.toLong() ?: 0L),
+            "Network    " + mbps(bandwidthBps),
+            "Buffer     " + String.format(java.util.Locale.US, "%.1f s", p.totalBufferedDuration / 1000.0),
+            "Dropped    $droppedFrames frames",
+            "Reconnects ${retries + stallReconnects}"
+        )
+        statsView?.text = lines.joinToString("\n")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         items = Repo.queue
@@ -206,6 +315,13 @@ class PlayerActivity : AppCompatActivity() {
         playerView.player = p
         PlayerFactory.styleSubtitles(playerView)
         p.addListener(listener)
+        p.addAnalyticsListener(analytics)
+        handler.removeCallbacks(watchdog)
+        handler.postDelayed(watchdog, 3000)
+        if (statsOn) {
+            handler.removeCallbacks(statsTicker)
+            handler.post(statsTicker)
+        }
     }
 
     /** Rebuilds the player (new picture mode / quality setting) and continues at the same spot. */
@@ -253,6 +369,8 @@ class PlayerActivity : AppCompatActivity() {
         shiftView.visibility = View.GONE
         Repo.queueIndex = index
         retries = 0
+        stallReconnects = 0
+        droppedFrames = 0
         token++
         recoverySteps = 0
         triedAltExt = false
@@ -704,7 +822,7 @@ class PlayerActivity : AppCompatActivity() {
                 recover(error)
             } else if (isParsingError(error)) {
                 fail(error)
-            } else if (item.isLive && retries < 5) {
+            } else if ((item.isLive || error.errorCode in 2000..2999) && retries < 5) {
                 retries++
                 errorView.text = "Connection lost. Reconnecting… ($retries/5)"
                 errorView.visibility = View.VISIBLE
@@ -1025,6 +1143,7 @@ class PlayerActivity : AppCompatActivity() {
             toast("Aspect ratio: ${resizeNames[resizeIdx]}")
         })
         if (!current.isLive) options.add("Playback speed: ${p.playbackParameters.speed}x" to { speedMenu() })
+        options.add((if (statsOn) "Hide stream stats" else "Show stream stats") to { toggleStats() })
         AlertDialog.Builder(this)
             .setTitle(current.title)
             .setItems(options.map { it.first }.toTypedArray()) { _, which -> options[which].second() }

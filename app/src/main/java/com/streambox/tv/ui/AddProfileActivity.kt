@@ -145,7 +145,7 @@ class AddProfileActivity : AppCompatActivity() {
             try {
                 Repo.authenticate(profile)
                 Prefs.addProfile(profile)
-                toast("Profile saved")
+                toast(if (Prefs.profilesNotSaved) "This TV can't store logins securely, so it will be asked again next time" else "Profile saved")
                 finish()
             } catch (e: Exception) {
                 status.text = "Could not sign in: ${Net.explain(e)}"

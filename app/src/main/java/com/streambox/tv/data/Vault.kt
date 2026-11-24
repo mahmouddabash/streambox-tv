@@ -41,6 +41,18 @@ object Vault {
         null
     }
 
+    /**
+     * Encrypts, and if the Keystore key is broken (happens on some TVs after a firmware update)
+     * makes a fresh key and tries once more. Null means the device can't encrypt at all.
+     */
+    fun encryptOrRepair(plain: String): String? = encrypt(plain) ?: run {
+        try {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS)
+        } catch (_: Exception) {
+        }
+        encrypt(plain)
+    }
+
     fun decrypt(data: String): String? = try {
         if (!data.startsWith(PREFIX)) null else {
             val b = Base64.decode(data.removePrefix(PREFIX), Base64.NO_WRAP)

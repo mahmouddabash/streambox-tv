@@ -21,7 +21,7 @@ object Updater {
     private const val API = "https://api.github.com/repos/mahmouddabash/streambox-tv/releases/latest"
     private const val DAY = 86_400_000L
 
-    data class Release(val build: Int, val apkUrl: String, val notes: String)
+    data class Release(val build: Int, val apkUrl: String, val notes: String, val shaUrl: String = "")
 
     val currentBuild: Int get() = BuildConfig.VERSION_CODE
 
@@ -34,11 +34,14 @@ object Updater {
                 val build = o.optString("tag_name").substringAfterLast('.').toIntOrNull() ?: return@withContext null
                 val assets = o.optJSONArray("assets") ?: return@withContext null
                 var url = ""
+                var sha = ""
                 for (i in 0 until assets.length()) {
                     val a = assets.getJSONObject(i)
-                    if (a.optString("name").endsWith(".apk")) url = a.optString("browser_download_url")
+                    val n = a.optString("name")
+                    if (n.endsWith(".apk")) url = a.optString("browser_download_url")
+                    if (n.endsWith(".apk.sha256")) sha = a.optString("browser_download_url")
                 }
-                if (url.isEmpty()) null else Release(build, url, o.optString("body"))
+                if (url.isEmpty()) null else Release(build, url, o.optString("body"), sha)
             }
         } catch (_: Exception) {
             null
@@ -118,6 +121,7 @@ object Updater {
                     val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
                     dir.listFiles()?.forEach { it.delete() }
                     val out = File(dir, "StreamBoxTV-${r.build}.apk")
+                    val digest = java.security.MessageDigest.getInstance("SHA-256")
                     Net.client.newCall(Request.Builder().url(r.apkUrl).build()).execute().use { resp ->
                         if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
                         val body = resp.body ?: throw java.io.IOException("Empty download")
@@ -130,6 +134,7 @@ object Updater {
                                     val n = input.read(buf)
                                     if (n < 0) break
                                     o.write(buf, 0, n)
+                                    digest.update(buf, 0, n)
                                     done += n
                                     if (total > 0) {
                                         val pct = (done * 100 / total).toInt()
@@ -137,6 +142,18 @@ object Updater {
                                     }
                                 }
                             }
+                        }
+                    }
+                    // 1) The file must match the checksum published with the release.
+                    val got = digest.digest().joinToString("") { "%02x".format(it) }
+                    if (r.shaUrl.isNotEmpty()) {
+                        val want = Net.client.newCall(Request.Builder().url(r.shaUrl).build()).execute().use {
+                            if (!it.isSuccessful) throw java.io.IOException("checksum unavailable (HTTP ${it.code})")
+                            it.body?.string().orEmpty().trim().substringBefore(' ').lowercase()
+                        }
+                        if (want != got) {
+                            out.delete()
+                            throw SecurityException("the file is damaged or was changed (checksum mismatch)")
                         }
                     }
                     out
@@ -147,8 +164,64 @@ object Updater {
                 return@launch
             }
             dialog.dismiss()
-            install(activity, file)
+            // 2) It must be StreamBox, signed with the same key as the app on this TV.
+            when (checkSigner(activity, file)) {
+                Signer.SAME, Signer.UNKNOWN -> install(activity, file)
+                Signer.OTHER_APP -> {
+                    file.delete()
+                    toast(activity, "Update blocked: the download isn't StreamBox")
+                }
+                Signer.NEW_KEY -> {
+                    file.delete()
+                    AlertDialog.Builder(activity)
+                        .setTitle("One-time reinstall needed")
+                        .setMessage(
+                            "This build is signed with StreamBox's new private security key, so Android can't install it over this copy.\n\n" +
+                                "1. Settings → Backup & restore → back up your profiles and settings.\n" +
+                                "2. Uninstall StreamBox.\n" +
+                                "3. Install it again with Downloader:\n   $SHORT_LINK\n" +
+                                "4. Restore your backup."
+                        )
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }
         }
+    }
+
+    private enum class Signer { SAME, NEW_KEY, OTHER_APP, UNKNOWN }
+
+    /** Compares the downloaded APK's package name and signing certificate with the installed app. */
+    @Suppress("DEPRECATION")
+    private fun checkSigner(activity: Activity, file: File): Signer = try {
+        val pm = activity.packageManager
+        val flags = if (Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        else android.content.pm.PackageManager.GET_SIGNATURES
+        val apk = pm.getPackageArchiveInfo(file.absolutePath, flags)
+        val mine = pm.getPackageInfo(activity.packageName, flags)
+        fun certs(i: android.content.pm.PackageInfo?): Set<String> {
+            val sigs = if (Build.VERSION.SDK_INT >= 28) i?.signingInfo?.let {
+                if (it.hasMultipleSigners()) it.apkContentsSigners else it.signingCertificateHistory
+            } else i?.signatures
+            return sigs.orEmpty().map { sig ->
+                java.security.MessageDigest.getInstance("SHA-256").digest(sig.toByteArray()).joinToString("") { "%02x".format(it) }
+            }.toSet()
+        }
+        when {
+            apk == null -> Signer.UNKNOWN
+            apk.packageName != activity.packageName -> Signer.OTHER_APP
+            else -> {
+                val a = certs(apk)
+                val m = certs(mine)
+                when {
+                    a.isEmpty() || m.isEmpty() -> Signer.UNKNOWN // Android still enforces the match itself
+                    a.any { it in m } -> Signer.SAME
+                    else -> Signer.NEW_KEY
+                }
+            }
+        }
+    } catch (_: Exception) {
+        Signer.UNKNOWN
     }
 
     /**

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <!-- Keep the classic (non edge-to-edge) layout on Android 15 phones. -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
         <item name="sbAccent">@color/accent</item>
         <item name="sbAccent2">@color/accent2</item>
         <item name="sbAccentDark">@color/accent_dark</item>

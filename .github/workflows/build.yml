@@ -21,9 +21,29 @@ jobs:
       - run: chmod +x gradlew
       - name: Unit tests
         run: ./gradlew testReleaseUnitTest --stacktrace
+      - name: Private signing key (repository secret SB_SIGNING = "password:base64-keystore")
+        env:
+          SB_SIGNING: ${{ secrets.SB_SIGNING }}
+        run: |
+          if [ -n "$SB_SIGNING" ]; then
+            printf '%s' "${SB_SIGNING#*:}" | base64 -d > "$RUNNER_TEMP/release.p12"
+            echo "::add-mask::${SB_SIGNING%%:*}"
+            echo "SB_KEYSTORE_FILE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+            echo "SB_KEYSTORE_PASSWORD=${SB_SIGNING%%:*}" >> "$GITHUB_ENV"
+            echo "Signing with the private release key"
+          else
+            echo "::warning::SB_SIGNING secret not set - signing with the old public key"
+          fi
+      - name: Lint (errors fail the build)
+        run: ./gradlew lintRelease --stacktrace
       - name: Build optimized release APK
         run: ./gradlew assembleRelease --stacktrace
       - run: cp app/build/outputs/apk/release/app-release.apk StreamBoxTV.apk
+      - name: Checksum for the in-app updater
+        run: sha256sum StreamBoxTV.apk > StreamBoxTV.apk.sha256
+      - name: Remove the key from the runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
       - name: Release notes from the commit message
         run: |
           git log -1 --pretty=%B | sed '/^Co-Authored-By/d;/^Claude-Session/d' > notes.md
@@ -43,5 +63,7 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: StreamBox TV build ${{ github.run_number }}
           body_path: notes.md
-          files: StreamBoxTV.apk
+          files: |
+            StreamBoxTV.apk
+            StreamBoxTV.apk.sha256
           make_latest: true
