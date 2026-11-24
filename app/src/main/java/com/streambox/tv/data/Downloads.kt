@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -223,10 +224,12 @@ object Downloads {
 
 /** Works through the download queue one item at a time. */
 class DownloadService : Service() {
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var worker: Job? = null
     private val client by lazy {
-        Net.client.newBuilder().readTimeout(45, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()
+        // No HTTP cache: video pieces would only be written twice.
+        Net.client.newBuilder().cache(null).readTimeout(45, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -335,6 +338,25 @@ class DownloadService : Service() {
         false
     }
 
+    /** The provider said no (usually its connection limit): retrying the same way won't help. */
+    private class Refused(msg: String) : java.io.IOException(msg)
+
+    /** One piece, retried a few times on network errors. */
+    private suspend fun fetchSegment(item: Downloads.Item, url: String): ByteArray {
+        var tries = 0
+        while (true) {
+            try {
+                return fetch(url).use { it.body?.bytes() ?: ByteArray(0) }
+            } catch (e: Refused) {
+                throw e
+            } catch (e: Exception) {
+                if (++tries >= 6) throw e
+                Downloads.update(item.id) { it.copy(note = "Retrying: ${e.message}") }
+                delay(3000L * tries)
+            }
+        }
+    }
+
     private class Seg(val url: String, val keyUrl: String?, val iv: ByteArray?, val seq: Long)
 
     private fun attrs(line: String): Map<String, String> {
@@ -354,8 +376,8 @@ class DownloadService : Service() {
             val code = resp.code
             resp.close()
             throw java.io.IOException(
-                if (code in listOf(401, 403, 429, 456, 458, 509, 512, 513))
-                    "Your provider refused (HTTP $code). It may allow only one connection: stop watching, then choose Try again"
+                if (code in listOf(401, 403, 429, 456, 458, 509, 512, 513)) throw Refused(
+                    "Your provider refused (HTTP $code). It may allow only one connection: stop watching, then choose Try again")
                 else "HTTP $code"
             )
         }
@@ -435,38 +457,43 @@ class DownloadService : Service() {
             val keys = HashMap<String, ByteArray>()
             java.io.FileOutputStream(file, true).use { out ->
                 if (index == 0 && mapUrl != null) fetch(mapUrl!!).use { r -> r.body?.byteStream()?.copyTo(out) }
+                // Several pieces at once is much faster; if the provider objects, go one at a time.
+                var parallel = PARALLEL
                 while (index < segs.size) {
                     val now = Downloads.get(item.id)
                     if (now == null || now.status != Downloads.RUNNING) return // paused or deleted: progress is kept
-                    val s = segs[index]
-                    var data: ByteArray? = null
-                    var tries = 0
-                    while (data == null) {
-                        try {
-                            data = fetch(s.url).use { it.body?.bytes() ?: ByteArray(0) }
-                        } catch (e: Exception) {
-                            if (++tries >= 6) throw e
-                            Downloads.update(item.id) { it.copy(note = "Retrying: ${e.message}") }
-                            delay(3000L * tries)
+                    val batch = (index until minOf(index + parallel, segs.size)).toList()
+                    val results: List<ByteArray> = try {
+                        kotlinx.coroutines.coroutineScope {
+                            batch.map { i -> async(Dispatchers.IO) { fetchSegment(item, segs[i].url) } }.map { it.await() }
                         }
+                    } catch (e: Refused) {
+                        if (parallel == 1) throw e
+                        parallel = 1
+                        Downloads.update(item.id) { it.copy(note = "Your provider allows one connection: downloading more slowly") }
+                        delay(2000)
+                        continue
                     }
-                    var bytes: ByteArray = data!!
-                    val ku = s.keyUrl
-                    if (ku != null) {
-                        val k = keys.getOrPut(ku) { fetch(ku).use { it.body?.bytes() ?: ByteArray(0) } }
-                        val ivBytes = s.iv ?: ByteArray(16) { i -> if (i < 8) 0 else (s.seq shr (8 * (15 - i))).toByte() }
-                        val c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding")
-                        c.init(javax.crypto.Cipher.DECRYPT_MODE, javax.crypto.spec.SecretKeySpec(k, "AES"), javax.crypto.spec.IvParameterSpec(ivBytes))
-                        bytes = c.doFinal(bytes)
+                    for ((j, i) in batch.withIndex()) {
+                        val s = segs[i]
+                        var bytes = results[j]
+                        val ku = s.keyUrl
+                        if (ku != null) {
+                            val k = keys.getOrPut(ku) { fetch(ku).use { it.body?.bytes() ?: ByteArray(0) } }
+                            val ivBytes = s.iv ?: ByteArray(16) { b -> if (b < 8) 0 else (s.seq shr (8 * (15 - b))).toByte() }
+                            val c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding")
+                            c.init(javax.crypto.Cipher.DECRYPT_MODE, javax.crypto.spec.SecretKeySpec(k, "AES"), javax.crypto.spec.IvParameterSpec(ivBytes))
+                            bytes = c.doFinal(bytes)
+                        }
+                        out.write(bytes)
                     }
-                    out.write(bytes)
                     out.flush()
-                    index++
+                    index += batch.size
                     val len = file.length()
                     side.writeText("$index $len")
                     Downloads.progress[item.id] = len
                     val estimate = len * segs.size / index
-                    Downloads.update(item.id) { it.copy(total = estimate, note = "") }
+                    Downloads.update(item.id) { it.copy(total = estimate, note = if (parallel == 1 && it.note.startsWith("Your provider")) it.note else "") }
                     updateNotification(item.title, len, estimate)
                 }
             }
@@ -522,6 +549,9 @@ class DownloadService : Service() {
     }
 
     companion object {
+        /** Pieces fetched at the same time for HLS downloads. */
+        private const val PARALLEL = 4
+
         private const val CHANNEL = "downloads"
         private const val ID = 7702
 
