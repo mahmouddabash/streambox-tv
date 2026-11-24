@@ -26,7 +26,12 @@ class SeriesDetailActivity : AppCompatActivity() {
     private lateinit var episodeAdapter: SimpleAdapter<Episode>
     private var seasons: Map<Int, List<Episode>> = emptyMap()
 
-    private fun epTitle(series: String, e: Episode) = "$series – S${e.season}E${e.num} ${e.title}"
+    private fun epTitle(series: String, e: Episode): String {
+        // Many providers already name episodes "S01 E05": don't repeat it.
+        val t = e.title.trim()
+        val hasCode = Regex("(?i)\\bS\\d+\\s*E\\d+").containsMatchIn(t)
+        return if (hasCode) "$series – $t" else "$series – S${e.season}E${e.num}" + (if (t.isNotEmpty()) " $t" else "")
+    }
 
     /** Downloaded episodes play offline. */
     private fun playUrl(e: Episode): String =

@@ -20,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
@@ -128,6 +129,7 @@ object Downloads {
         save(all().filterNot { it.id == id })
         progress.remove(id)
         File(item.file).delete()
+        File(item.file + ".hls").delete()
         DownloadService.start(context)
     }
 
@@ -146,7 +148,7 @@ object Downloads {
         }
         val txt = String(head, Charsets.ISO_8859_1)
         if (txt.trimStart('\uFEFF', ' ', '\r', '\n').startsWith("#EXTM3U"))
-            return "Your server sends this title as a live stream playlist, which can't be saved. Watch it online instead"
+            return "The download didn't finish. Choose Try again"
         val printable = head.count { b -> val c = b.toInt() and 0xff; c == 9 || c == 10 || c == 13 || c in 32..126 }
         if (f.length() < 2_000_000 && printable > head.size * 0.9) {
             val msg = txt.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim().take(80)
@@ -171,6 +173,8 @@ object Downloads {
         if (all().any { it.status == RUNNING }) {
             save(all().map { if (it.status == RUNNING) it.copy(status = QUEUED) else it })
         }
+        val hls = all().filter { it.status == FAILED && it.note.startsWith("Your server sends this title as a live stream playlist") }
+        if (hls.isNotEmpty()) save(all().map { d -> if (hls.any { it.id == d.id }) d.copy(status = QUEUED, note = "", total = 0) else d })
         if (all().any { it.status == QUEUED }) DownloadService.start(context)
     }
 }
@@ -204,8 +208,14 @@ class DownloadService : Service() {
     private suspend fun download(item: Downloads.Item) {
         Downloads.update(item.id) { it.copy(status = Downloads.RUNNING, note = "") }
         val file = File(item.file).apply { parentFile?.mkdirs() }
+        // A paused HLS download carries on from its last piece.
+        if (File(file.path + ".hls").exists()) {
+            finishHls(item, file, null, item.url)
+            return
+        }
         var failures = 0
         var total = item.total
+        var finalUrl = item.url
         while (scope.isActive && failures < 8) {
             // Stop if the user paused or deleted it meanwhile.
             val now = Downloads.get(item.id)
@@ -216,6 +226,7 @@ class DownloadService : Service() {
                 val req = Request.Builder().url(item.url).apply { if (have > 0) header("Range", "bytes=$have-") }.build()
                 client.newCall(req).execute().use { resp ->
                     if (resp.code == 416) return@use // already complete
+                    finalUrl = resp.request.url.toString()
                     if (resp.code in listOf(401, 403, 429, 456, 458, 509, 512, 513)) {
                         failures = 99 // retrying straight away won't help
                         throw java.io.IOException("Your provider refused (HTTP ${resp.code}). It may allow only one connection: stop watching, then choose Try again")
@@ -256,6 +267,13 @@ class DownloadService : Service() {
                 if (failures < 8) delay(4000L * failures)
             }
         }
+        // Many providers serve films and episodes as HLS: a playlist of short video pieces.
+        if (file.exists() && file.length() in 1..2_000_000 && isPlaylist(file)) {
+            val text = file.readText()
+            file.delete()
+            finishHls(item, file, text, finalUrl)
+            return
+        }
         Downloads.progress.remove(item.id)
         val size = file.length()
         val complete = size > 0 && (total <= 0 || size >= total)
@@ -266,6 +284,166 @@ class DownloadService : Service() {
             if (it.status != Downloads.RUNNING) it
             else it.copy(status = if (ok) Downloads.DONE else Downloads.FAILED, total = if (ok) size else 0,
                 note = if (ok) "" else bad ?: it.note.removePrefix("Retrying: ").ifBlank { "Download failed" })
+        }
+    }
+
+    private fun isPlaylist(f: File): Boolean = try {
+        f.inputStream().use { val b = ByteArray(64); val n = it.read(b); n > 0 && String(b, 0, n, Charsets.ISO_8859_1).trimStart('\uFEFF', ' ', '\r', '\n').startsWith("#EXTM3U") }
+    } catch (_: Exception) {
+        false
+    }
+
+    private class Seg(val url: String, val keyUrl: String?, val iv: ByteArray?, val seq: Long)
+
+    private fun attrs(line: String): Map<String, String> {
+        val out = HashMap<String, String>()
+        Regex("([A-Z0-9-]+)=(\"[^\"]*\"|[^,]*)").findAll(line.substringAfter(':')).forEach {
+            out[it.groupValues[1]] = it.groupValues[2].trim('"')
+        }
+        return out
+    }
+
+    private fun resolve(base: String, ref: String): String =
+        base.toHttpUrlOrNull()?.resolve(ref.trim())?.toString() ?: ref.trim()
+
+    private fun fetch(url: String): okhttp3.Response {
+        val resp = client.newCall(Request.Builder().url(url).build()).execute()
+        if (!resp.isSuccessful) {
+            val code = resp.code
+            resp.close()
+            throw java.io.IOException(
+                if (code in listOf(401, 403, 429, 456, 458, 509, 512, 513))
+                    "Your provider refused (HTTP $code). It may allow only one connection: stop watching, then choose Try again"
+                else "HTTP $code"
+            )
+        }
+        return resp
+    }
+
+    private fun fetchText(url: String): Pair<String, String> =
+        fetch(url).use { (it.body?.string() ?: "") to it.request.url.toString() }
+
+    /**
+     * Downloads an HLS title: picks the best quality, fetches every piece in order (decrypting
+     * AES-128 if used) and joins them into one file that plays offline. Progress is kept in
+     * "<file>.hls" so Pause / a reboot continue from the last piece.
+     */
+    private suspend fun finishHls(item: Downloads.Item, file: File, firstText: String?, firstUrl: String) {
+        val side = File(file.path + ".hls")
+        try {
+            var (text, url) = if (firstText != null) firstText to firstUrl else fetchText(item.url)
+            // Master playlist: choose the highest-quality variant.
+            if (text.contains("#EXT-X-STREAM-INF")) {
+                val lines = text.lines()
+                var best = -1L
+                var bestUrl = ""
+                for (i in lines.indices) {
+                    if (!lines[i].startsWith("#EXT-X-STREAM-INF")) continue
+                    val bw = attrs(lines[i])["BANDWIDTH"]?.toLongOrNull() ?: 0L
+                    val next = lines.drop(i + 1).firstOrNull { it.isNotBlank() && !it.startsWith("#") } ?: continue
+                    if (bw > best) { best = bw; bestUrl = resolve(url, next) }
+                }
+                if (bestUrl.isEmpty()) throw java.io.IOException("No video in the playlist")
+                val r = fetchText(bestUrl)
+                text = r.first
+                url = r.second
+            }
+            if (!text.contains("#EXT-X-ENDLIST") && !text.contains("#EXTINF"))
+                throw java.io.IOException("This title is a live stream and can't be saved")
+            // Media playlist.
+            val segs = ArrayList<Seg>()
+            var seq = 0L
+            var keyUrl: String? = null
+            var iv: ByteArray? = null
+            var mapUrl: String? = null
+            for (raw in text.lines()) {
+                val line = raw.trim()
+                when {
+                    line.startsWith("#EXT-X-MEDIA-SEQUENCE:") -> seq = line.substringAfter(':').trim().toLongOrNull() ?: 0L
+                    line.startsWith("#EXT-X-KEY:") -> {
+                        val a = attrs(line)
+                        when (a["METHOD"]) {
+                            "NONE", null -> { keyUrl = null; iv = null }
+                            "AES-128" -> {
+                                keyUrl = a["URI"]?.let { resolve(url, it) }
+                                iv = a["IV"]?.removePrefix("0x")?.removePrefix("0X")?.let { h ->
+                                    ByteArray(16) { i -> h.padStart(32, '0').substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+                                }
+                            }
+                            else -> throw java.io.IOException("This title is copy-protected and can't be saved")
+                        }
+                    }
+                    line.startsWith("#EXT-X-MAP:") -> mapUrl = attrs(line)["URI"]?.let { resolve(url, it) }
+                    line.isNotEmpty() && !line.startsWith("#") -> segs.add(Seg(resolve(url, line), keyUrl, iv, seq++))
+                }
+            }
+            if (segs.isEmpty()) throw java.io.IOException("The playlist is empty")
+
+            // Where we stopped last time: "<next piece> <bytes written>".
+            var index = 0
+            if (side.exists() && file.exists()) {
+                val parts = side.readText().trim().split(' ')
+                index = parts.getOrNull(0)?.toIntOrNull() ?: 0
+                val len = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                RandomAccessFile(file, "rw").use { it.setLength(len) }
+            } else {
+                file.delete()
+                side.writeText("0 0")
+            }
+            val keys = HashMap<String, ByteArray>()
+            java.io.FileOutputStream(file, true).use { out ->
+                if (index == 0 && mapUrl != null) fetch(mapUrl!!).use { r -> r.body?.byteStream()?.copyTo(out) }
+                while (index < segs.size) {
+                    val now = Downloads.get(item.id)
+                    if (now == null || now.status != Downloads.RUNNING) return // paused or deleted: progress is kept
+                    val s = segs[index]
+                    var data: ByteArray? = null
+                    var tries = 0
+                    while (data == null) {
+                        try {
+                            data = fetch(s.url).use { it.body?.bytes() ?: ByteArray(0) }
+                        } catch (e: Exception) {
+                            if (++tries >= 6) throw e
+                            Downloads.update(item.id) { it.copy(note = "Retrying: ${e.message}") }
+                            delay(3000L * tries)
+                        }
+                    }
+                    var bytes: ByteArray = data!!
+                    val ku = s.keyUrl
+                    if (ku != null) {
+                        val k = keys.getOrPut(ku) { fetch(ku).use { it.body?.bytes() ?: ByteArray(0) } }
+                        val ivBytes = s.iv ?: ByteArray(16) { i -> if (i < 8) 0 else (s.seq shr (8 * (15 - i))).toByte() }
+                        val c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding")
+                        c.init(javax.crypto.Cipher.DECRYPT_MODE, javax.crypto.spec.SecretKeySpec(k, "AES"), javax.crypto.spec.IvParameterSpec(ivBytes))
+                        bytes = c.doFinal(bytes)
+                    }
+                    out.write(bytes)
+                    out.flush()
+                    index++
+                    val len = file.length()
+                    side.writeText("$index $len")
+                    Downloads.progress[item.id] = len
+                    val estimate = len * segs.size / index
+                    Downloads.update(item.id) { it.copy(total = estimate, note = "") }
+                    updateNotification(item.title, len, estimate)
+                }
+            }
+            side.delete()
+            Downloads.progress.remove(item.id)
+            val size = file.length()
+            val bad = if (size < 1_000_000) "The server sent an incomplete file. Choose Try again" else null
+            if (bad != null) file.delete()
+            Downloads.update(item.id) {
+                if (it.status != Downloads.RUNNING) it
+                else it.copy(status = if (bad == null) Downloads.DONE else Downloads.FAILED,
+                    total = if (bad == null) size else 0, note = bad ?: "")
+            }
+        } catch (e: Exception) {
+            Downloads.progress.remove(item.id)
+            Downloads.update(item.id) {
+                if (it.status != Downloads.RUNNING) it
+                else it.copy(status = Downloads.FAILED, note = e.message ?: "Download failed")
+            }
         }
     }
 
