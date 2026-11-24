@@ -105,7 +105,8 @@ object Downloads {
     /** Adds a title to the queue (ignored if it is already downloaded or queued). */
     fun add(context: Context, key: String, title: String, poster: String, url: String): Boolean {
         if (all().any { it.key == key && it.profileId == Repo.profileId && it.status != FAILED }) return false
-        val ext = url.substringBefore('?').substringAfterLast('.', "mp4").take(5).ifBlank { "mp4" }
+        val ext = url.substringBefore('?').substringAfterLast('.', "mp4").take(5).lowercase()
+            .let { if (it.isBlank() || it in setOf("m3u8", "m3u", "php", "mpd")) "ts" else it }
         val safe = title.ifBlank { "Video" }.replace(Regex("[^\\p{L}\\p{N} ._-]+"), "_").take(70).trim()
         val file = File(dir(context), "$safe.$ext")
         val item = Item("dl${System.nanoTime()}", Repo.profileId, key, title.ifBlank { file.nameWithoutExtension }, poster, url, file.absolutePath, QUEUED)
