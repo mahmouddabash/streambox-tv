@@ -162,7 +162,7 @@ class DownloadService : Service() {
             val next = Downloads.all().firstOrNull { it.status == Downloads.QUEUED } ?: break
             download(next)
         }
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        if (android.os.Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
         stopSelf()
     }
 

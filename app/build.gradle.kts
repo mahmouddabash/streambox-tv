@@ -68,6 +68,9 @@ android {
         abortOnError = true
         checkReleaseBuilds = true
         checkDependencies = false
+        textReport = true
+        textOutput = file("stdout")
+        explainIssues = false
         disable += setOf("MissingTranslation", "ExtraTranslation", "IconMissingDensityFolder", "ObsoleteSdkInt", "GradleDependency", "OldTargetApi")
     }
 }
