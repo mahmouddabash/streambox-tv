@@ -175,6 +175,32 @@ object Downloads {
         return null
     }
 
+    /**
+     * Removes several downloads at once: the list entries always go (even when the file is
+     * already missing), and their files are deleted from whichever drive they're on.
+     * With [cleanLeftovers], files in the Downloads folders that no entry uses anymore are deleted too.
+     */
+    fun deleteMany(context: Context, ids: Set<String>, cleanLeftovers: Boolean): Int {
+        val gone = all().filter { it.id in ids }
+        save(all().filterNot { it.id in ids })
+        gone.forEach {
+            progress.remove(it.id)
+            try {
+                File(it.file).delete()
+                File(it.file + ".hls").delete()
+            } catch (_: Exception) {
+            }
+        }
+        if (cleanLeftovers) {
+            val keep = all().flatMap { listOf(it.file, it.file + ".hls") }.toSet()
+            dirs(context).forEach { d ->
+                d.listFiles()?.forEach { f -> if (f.isFile && f.absolutePath !in keep) f.delete() }
+            }
+        }
+        DownloadService.start(context)
+        return gone.size
+    }
+
     /** After a reboot or crash nothing is "running": put it back in the queue. */
     fun recover(context: Context) {
         // Earlier builds could mark a server error reply as "downloaded": flag those so they can be retried.

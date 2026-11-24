@@ -33,6 +33,20 @@ class DownloadsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_list)
         findViewById<TextView>(R.id.title).text = "Downloads"
         status = findViewById(R.id.status)
+        // "Select & delete" button under the title (MENU on the remote opens it too).
+        val root = status.parent as android.widget.LinearLayout
+        val bar = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
+        bar.addView(android.widget.Button(this, null, 0, R.style.Btn).apply {
+            text = Tr.s("🗑  Select & delete")
+            setOnClickListener { selectAndDelete() }
+        })
+        bar.addView(android.widget.Button(this, null, 0, R.style.Btn).apply {
+            text = Tr.s("🗑  Delete all")
+            setOnClickListener { confirmDeleteAll() }
+        }, android.widget.LinearLayout.LayoutParams(-2, -2).apply { marginStart = (12 * resources.displayMetrics.density).toInt() })
+        root.addView(bar, root.indexOfChild(status) + 1, android.widget.LinearLayout.LayoutParams(-2, -2).apply {
+            bottomMargin = (10 * resources.displayMetrics.density).toInt()
+        })
         adapter = SimpleAdapter(
             R.layout.item_two_line,
             bind = { v, d, _ ->
@@ -89,6 +103,66 @@ class DownloadsActivity : AppCompatActivity() {
         status.text = if (all.isEmpty())
             "Nothing downloaded yet. Open a movie or series and choose ⬇ Download."
         else "Saved in ${Downloads.dir(this).absolutePath}   •   one download at a time"
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+            selectAndDelete()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun mine() = Downloads.all().filter { it.profileId == Repo.profileId || !Repo.loaded }.sortedByDescending { it.addedAt }
+
+    /** Tick downloads to remove; files are deleted from storage, and missing ones are removed from the list anyway. */
+    private fun selectAndDelete() {
+        val list = mine()
+        if (list.isEmpty()) {
+            toast("Nothing downloaded yet")
+            return
+        }
+        val labels = list.map { d ->
+            val f = File(d.file)
+            d.title.ifBlank { f.nameWithoutExtension } + "   •   " +
+                (if (f.exists()) gb(f.length()) else Tr.s("file missing"))
+        }.toTypedArray()
+        val checked = BooleanArray(list.size)
+        val dlg = AlertDialog.Builder(this)
+            .setTitle("Select downloads to delete")
+            .setMultiChoiceItems(labels, checked) { _, w, on -> checked[w] = on }
+            .setPositiveButton("🗑  Delete") { _, _ ->
+                val ids = list.filterIndexed { i, _ -> checked[i] }.map { it.id }.toSet()
+                if (ids.isEmpty()) return@setPositiveButton
+                val n = Downloads.deleteMany(this, ids, cleanLeftovers = false)
+                toast("$n deleted")
+                reload()
+            }
+            .setNeutralButton("Select all", null)
+            .setNegativeButton("Cancel", null)
+            .show()
+        dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { b ->
+            val all = checked.all { it }
+            for (i in checked.indices) {
+                checked[i] = !all
+                dlg.listView.setItemChecked(i, !all)
+            }
+            (b as android.widget.Button).text = Tr.s(if (all) "Select all" else "Select none")
+        }
+    }
+
+    private fun confirmDeleteAll() {
+        val list = mine()
+        AlertDialog.Builder(this)
+            .setTitle("Delete all downloads?")
+            .setMessage("Removes every download from the list and deletes the files from the TV and any USB drive, including leftover files. This can't be undone.")
+            .setPositiveButton("🗑  Delete all") { _, _ ->
+                val n = Downloads.deleteMany(this, list.map { it.id }.toSet(), cleanLeftovers = true)
+                toast("$n deleted")
+                reload()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun open(d: Downloads.Item) {
