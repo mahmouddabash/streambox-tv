@@ -65,13 +65,41 @@ class SeriesDetailActivity : AppCompatActivity() {
         findViewById<android.widget.Button>(R.id.btnDownload).setOnClickListener {
             val list = episodeAdapter.items
             if (list.isEmpty()) return@setOnClickListener
-            var added = 0
-            for (e in list) {
-                Prefs.setEpisodeSeries(key(e), s.id)
-                if (com.streambox.tv.data.Downloads.add(this, key(e), epTitle(s.name, e), s.poster, e.url)) added++
+            // Pick the episodes to save (all are ticked; untick the ones you don't want).
+            val labels = list.map { e ->
+                val st = com.streambox.tv.data.Downloads.forKey(key(e))?.status
+                "E${e.num}  ${e.title}" + when (st) {
+                    com.streambox.tv.data.Downloads.DONE -> "   ✓"
+                    null, com.streambox.tv.data.Downloads.FAILED -> ""
+                    else -> "   ⬇"
+                }
+            }.toTypedArray()
+            val checked = BooleanArray(list.size) { com.streambox.tv.data.Downloads.forKey(key(list[it])).let { d -> d == null || d.status == com.streambox.tv.data.Downloads.FAILED } }
+            val dlg = androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Choose episodes to download")
+                .setMultiChoiceItems(labels, checked) { _, w, on -> checked[w] = on }
+                .setPositiveButton("⬇  Download") { _, _ ->
+                    var added = 0
+                    list.forEachIndexed { i, e ->
+                        if (!checked[i]) return@forEachIndexed
+                        Prefs.setEpisodeSeries(key(e), s.id)
+                        if (com.streambox.tv.data.Downloads.add(this, key(e), epTitle(s.name, e), s.poster, e.url)) added++
+                    }
+                    toast(if (added > 0) "$added episodes added to downloads" else "Nothing new to download")
+                    episodeAdapter.notifyDataSetChanged()
+                }
+                .setNeutralButton("Select none", null)
+                .setNegativeButton("Cancel", null)
+                .show()
+            // "Select none" / "Select all" toggles every tick without closing the dialog.
+            dlg.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener { b ->
+                val any = checked.any { it }
+                for (i in checked.indices) {
+                    checked[i] = !any
+                    dlg.listView.setItemChecked(i, !any)
+                }
+                (b as android.widget.Button).text = Tr.s(if (any) "Select all" else "Select none")
             }
-            toast(if (added > 0) "$added episodes added to downloads" else "Already in downloads")
-            episodeAdapter.notifyDataSetChanged()
         }
         val btnTrailer = findViewById<android.widget.Button>(R.id.btnTrailer)
         fun showTrailer(id: String) {

@@ -186,6 +186,20 @@ class SettingsActivity : AppCompatActivity() {
             val labels = dirs.mapIndexed { i, d -> (if (i == 0) "TV storage" else "USB / SD card $i") + "   " + d.absolutePath }.toTypedArray()
             choose("Record to", labels, Prefs.recordingStorage.coerceIn(0, (dirs.size - 1).coerceAtLeast(0))) { Prefs.recordingStorage = it }
         })
+        val dlDirs = com.streambox.tv.data.Downloads.dirs(this)
+        val dlNow = com.streambox.tv.data.Downloads.dir(this)
+        rows.add(Row("Download location", (if (Prefs.downloadStorage <= 0 || dlDirs.size < 2) "TV storage" else "USB / SD card ${Prefs.downloadStorage}") +
+            "   •   " + com.streambox.tv.data.Downloads.freeSpace(dlNow) +
+            if (dlDirs.size > 1) "   •   ${dlDirs.size} drives found" else "   •   plug in a USB drive to save films there") {
+            val labels = dlDirs.mapIndexed { i, d ->
+                d.mkdirs()
+                (if (i == 0) "TV storage" else "USB / SD card $i") + "   •   " + com.streambox.tv.data.Downloads.freeSpace(d)
+            }.toTypedArray()
+            choose("Save new downloads to", labels, Prefs.downloadStorage.coerceIn(0, (dlDirs.size - 1).coerceAtLeast(0))) {
+                Prefs.downloadStorage = it
+                if (it > 0) toast("New downloads go to the USB drive. Keep it plugged in to watch them")
+            }
+        })
         rows.add(Row("Picture-in-picture on Home button", if (Prefs.autoPip) "On: keep watching in a small window" else "Off") {
             Prefs.autoPip = !Prefs.autoPip
             refresh()

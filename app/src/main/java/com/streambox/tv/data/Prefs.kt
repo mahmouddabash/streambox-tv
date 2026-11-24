@@ -427,6 +427,11 @@ object Prefs {
         if (list.isNotEmpty()) saveProfiles(list)
     }
 
+    /** Drive for new downloads: 0 = TV storage, 1+ = USB drive / SD card. */
+    var downloadStorage: Int
+        get() = sp.getInt("downloadStorage", 0)
+        set(v) = sp.edit().putInt("downloadStorage", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

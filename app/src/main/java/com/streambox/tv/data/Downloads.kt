@@ -97,9 +97,24 @@ object Downloads {
 
     fun bytes(item: Item): Long = progress[item.id] ?: File(item.file).length()
 
+    /** Folders downloads can go to: TV storage first, then any USB drive / SD card. */
+    fun dirs(context: Context): List<File> =
+        context.getExternalFilesDirs(null).filterNotNull().map { File(it, "Downloads") }
+
+    /** Where new downloads are saved (Settings → Download location). Existing ones stay where they are. */
     fun dir(context: Context): File {
-        val base = Recorder.storageDir(context).parentFile ?: context.filesDir
-        return File(base, "Downloads").apply { mkdirs() }
+        val all = dirs(context)
+        val d = all.getOrNull(Prefs.downloadStorage) ?: all.firstOrNull() ?: File(context.filesDir, "Downloads")
+        return d.apply { mkdirs() }
+    }
+
+    /** Free space on the drive holding [f], for labels like "120 GB free". */
+    fun freeSpace(f: File): String = try {
+        val b = android.os.StatFs((f.parentFile ?: f).absolutePath).availableBytes
+        if (b >= 1_073_741_824L) String.format(java.util.Locale.US, "%.0f GB free", b / 1_073_741_824.0)
+        else String.format(java.util.Locale.US, "%.0f MB free", b / 1_048_576.0)
+    } catch (_: Exception) {
+        ""
     }
 
     /** Adds a title to the queue (ignored if it is already downloaded or queued). */
