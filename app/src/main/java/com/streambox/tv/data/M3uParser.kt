@@ -26,7 +26,7 @@ object M3uParser {
         var n = 0
 
         for (raw in reader.lineSequence()) {
-            val line = raw.trim().removePrefix("﻿")
+            val line = raw.trim().removePrefix("\uFEFF")
             when {
                 line.isEmpty() -> {
                 }
