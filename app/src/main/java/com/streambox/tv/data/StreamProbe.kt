@@ -50,7 +50,7 @@ object StreamProbe {
 
     private fun classify(b: ByteArray, ct: String, url: String): Kind {
         if (b.isEmpty()) return Kind.EMPTY
-        val text = String(b, 0, minOf(b.size, 512), Charsets.ISO_8859_1).trimStart('﻿', ' ', '\r', '\n', '\t', 'ï', '»', '¿')
+        val text = String(b, 0, minOf(b.size, 512), Charsets.ISO_8859_1).trimStart('\uFEFF', ' ', '\r', '\n', '\t', 'ï', '»', '¿')
         fun at(i: Int, vararg sig: Int) = b.size >= i + sig.size && sig.indices.all { (b[i + it].toInt() and 0xFF) == sig[it] }
         fun ascii(i: Int, s: String) = b.size >= i + s.length && s.indices.all { b[i + it].toInt().toChar() == s[it] }
 
