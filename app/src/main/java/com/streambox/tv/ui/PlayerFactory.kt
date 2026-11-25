@@ -22,7 +22,6 @@ import com.streambox.tv.data.Prefs
  * screens, phones and tablets). Many car audio systems accept only two channels and stay silent
  * when sent six.
  */
-@OptIn(markerClass = [UnstableApi::class])
 class StereoAwareRenderers(context: Context) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(
         context: Context,
@@ -65,6 +64,7 @@ class StereoAwareRenderers(context: Context) : DefaultRenderersFactory(context) 
     }
 }
 
+@OptIn(markerClass = [UnstableApi::class])
 object PlayerFactory {
 
     /**
