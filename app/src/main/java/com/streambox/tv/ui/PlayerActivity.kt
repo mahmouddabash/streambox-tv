@@ -530,24 +530,24 @@ class PlayerActivity : AppCompatActivity() {
             Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
         )
         private fun multi() = items.size > 1
-        private fun hasNext() = multi() && (current.isLive || index < items.size - 1)
-        private fun hasPrev() = multi() && (current.isLive || index > 0)
+        private fun canGoNext() = multi() && (current.isLive || index < items.size - 1)
+        private fun canGoPrev() = multi() && (current.isLive || index > 0)
 
         override fun getAvailableCommands(): Player.Commands {
             val b = super.getAvailableCommands().buildUpon()
-            if (hasNext()) b.add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-            if (hasPrev()) b.add(Player.COMMAND_SEEK_TO_PREVIOUS).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            if (canGoNext()) b.add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            if (canGoPrev()) b.add(Player.COMMAND_SEEK_TO_PREVIOUS).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
             return b.build()
         }
 
         override fun isCommandAvailable(command: Int): Boolean = when (command) {
-            Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> hasNext() || super.isCommandAvailable(command)
-            Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> hasPrev() || super.isCommandAvailable(command)
+            Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> canGoNext() || super.isCommandAvailable(command)
+            Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> canGoPrev() || super.isCommandAvailable(command)
             else -> super.isCommandAvailable(command)
         }
 
-        override fun hasNextMediaItem() = hasNext() || super.hasNextMediaItem()
-        override fun hasPreviousMediaItem() = hasPrev() || super.hasPreviousMediaItem()
+        override fun hasNextMediaItem() = canGoNext() || super.hasNextMediaItem()
+        override fun hasPreviousMediaItem() = canGoPrev() || super.hasPreviousMediaItem()
         override fun seekToNext() = if (multi()) go(1) else super.seekToNext()
         override fun seekToNextMediaItem() = if (multi()) go(1) else super.seekToNextMediaItem()
         override fun seekToPrevious() = if (multi()) go(-1) else super.seekToPrevious()
