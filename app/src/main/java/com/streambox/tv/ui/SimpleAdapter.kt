@@ -26,6 +26,19 @@ class SimpleAdapter<T>(
         notifyDataSetChanged()
     }
 
+    /**
+     * Updates the rows in place when only their contents changed (same items, same order), so the
+     * selected row keeps focus. Falls back to a full refresh when items were added or removed.
+     */
+    fun update(list: List<T>, sameItem: (T, T) -> Boolean) {
+        if (list.size == items.size && list.indices.all { sameItem(list[it], items[it]) }) {
+            items = list
+            for (i in list.indices) notifyItemChanged(i, REBIND)
+        } else {
+            submit(list, selected.coerceAtMost(list.size - 1))
+        }
+    }
+
     fun select(position: Int) {
         val old = selected
         selected = position

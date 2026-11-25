@@ -100,7 +100,8 @@ class DownloadsActivity : AppCompatActivity() {
 
     private fun reload() {
         val all = Downloads.all().filter { it.profileId == Repo.profileId || !Repo.loaded }.sortedByDescending { it.addedAt }
-        adapter.submit(all, adapter.selected.coerceAtMost(all.size - 1))
+        // Progress updates every 2 s must not move the selection back to the top.
+        adapter.update(all) { a, b -> a.id == b.id }
         status.text = if (all.isEmpty())
             "Nothing downloaded yet. Open a movie or series and choose ⬇ Download."
         else "Saved in ${Downloads.dir(this).absolutePath}   •   one download at a time"
