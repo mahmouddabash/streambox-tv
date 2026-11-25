@@ -260,7 +260,7 @@ class PlayerActivity : AppCompatActivity() {
 
         playerView = findViewById(R.id.playerView)
         resizeIdx = Prefs.videoFit.coerceIn(0, resizeModes.size - 1)
-        playerView.resizeMode = resizeModes[resizeIdx]
+        applyFit()
         addFitButton()
         overlay = findViewById(R.id.overlay)
         ovTitle = findViewById(R.id.ovTitle)
@@ -1157,12 +1157,25 @@ class PlayerActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ Options
 
+    // Many IPTV films are wide cinema pictures with black bars burned into a 16:9 stream, so
+    // Fit / Fill / Stretch look the same: the zoom modes enlarge the picture itself to cut the bars.
     private val resizeModes = intArrayOf(
         AspectRatioFrameLayout.RESIZE_MODE_FIT,
+        AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
         AspectRatioFrameLayout.RESIZE_MODE_FILL,
-        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        AspectRatioFrameLayout.RESIZE_MODE_FIT,
+        AspectRatioFrameLayout.RESIZE_MODE_FIT
     )
-    private val resizeNames = arrayOf("Fit", "Stretch", "Zoom")
+    private val resizeZoom = floatArrayOf(1f, 1f, 1f, 1.15f, 1.33f)
+    private val resizeNames = arrayOf("Original", "Fill screen", "Stretch", "Zoom 115%", "Remove black bars (cinema)")
+
+    private fun applyFit() {
+        playerView.resizeMode = resizeModes[resizeIdx]
+        val z = resizeZoom[resizeIdx]
+        val content = playerView.findViewById<View>(androidx.media3.ui.R.id.exo_content_frame) ?: playerView.videoSurfaceView
+        content?.scaleX = z
+        content?.scaleY = z
+    }
 
     /** "Video fit" button in the control bar, next to subtitles and settings. */
     private fun addFitButton() {
@@ -1178,9 +1191,13 @@ class PlayerActivity : AppCompatActivity() {
     /** Fit → Stretch → Zoom; the choice is remembered for next time. */
     private fun cycleFit() {
         resizeIdx = (resizeIdx + 1) % resizeModes.size
-        playerView.resizeMode = resizeModes[resizeIdx]
+        applyFit()
         Prefs.videoFit = resizeIdx
-        toast(Tr.s("Video fit: {}").replace("{}", Tr.s(resizeNames[resizeIdx])))
+        // Big label on the picture so the change is obvious even when the shape barely moves.
+        shiftView.text = "⛶  " + Tr.s("Video fit: {}").replace("{}", Tr.s(resizeNames[resizeIdx]))
+        shiftView.visibility = View.VISIBLE
+        handler.removeCallbacks(hideSeek)
+        handler.postDelayed(hideSeek, 1800)
     }
 
     private fun optionsMenu() {
