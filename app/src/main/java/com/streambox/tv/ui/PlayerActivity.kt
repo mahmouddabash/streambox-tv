@@ -259,6 +259,9 @@ class PlayerActivity : AppCompatActivity() {
         setContentView(R.layout.activity_player)
 
         playerView = findViewById(R.id.playerView)
+        resizeIdx = Prefs.videoFit.coerceIn(0, resizeModes.size - 1)
+        playerView.resizeMode = resizeModes[resizeIdx]
+        addFitButton()
         overlay = findViewById(R.id.overlay)
         ovTitle = findViewById(R.id.ovTitle)
         ovNow = findViewById(R.id.ovNow)
@@ -1161,6 +1164,25 @@ class PlayerActivity : AppCompatActivity() {
     )
     private val resizeNames = arrayOf("Fit", "Stretch", "Zoom")
 
+    /** "Video fit" button in the control bar, next to subtitles and settings. */
+    private fun addFitButton() {
+        val bar = playerView.findViewById<android.view.ViewGroup>(androidx.media3.ui.R.id.exo_basic_controls) ?: return
+        val btn = android.widget.ImageButton(this, null, 0, androidx.media3.ui.R.style.ExoStyledControls_Button_Bottom).apply {
+            setImageResource(R.drawable.ic_video_fit)
+            contentDescription = Tr.s("Video fit")
+            setOnClickListener { cycleFit() }
+        }
+        bar.addView(btn, 0)
+    }
+
+    /** Fit → Stretch → Zoom; the choice is remembered for next time. */
+    private fun cycleFit() {
+        resizeIdx = (resizeIdx + 1) % resizeModes.size
+        playerView.resizeMode = resizeModes[resizeIdx]
+        Prefs.videoFit = resizeIdx
+        toast(Tr.s("Video fit: {}").replace("{}", Tr.s(resizeNames[resizeIdx])))
+    }
+
     private fun optionsMenu() {
         val p = player ?: return
         val options = ArrayList<Pair<String, () -> Unit>>()
@@ -1187,9 +1209,7 @@ class PlayerActivity : AppCompatActivity() {
         if (!current.isLive) options.add("Find subtitles online (OpenSubtitles)" to { findSubtitles() })
         options.add("Subtitle style" to { subtitleStyleMenu() })
         options.add("Aspect ratio: ${resizeNames[resizeIdx]}" to {
-            resizeIdx = (resizeIdx + 1) % resizeModes.size
-            playerView.resizeMode = resizeModes[resizeIdx]
-            toast("Aspect ratio: ${resizeNames[resizeIdx]}")
+            cycleFit()
         })
         if (!current.isLive) options.add("Playback speed: ${p.playbackParameters.speed}x" to { speedMenu() })
         options.add((if (statsOn) "Hide stream stats" else "Show stream stats") to { toggleStats() })

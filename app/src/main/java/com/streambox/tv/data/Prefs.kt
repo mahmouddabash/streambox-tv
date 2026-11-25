@@ -448,6 +448,11 @@ object Prefs {
     @Volatile
     var isTouchDevice = false
 
+    /** Video fit chosen in the player: 0 Fit, 1 Stretch, 2 Zoom (remembered). */
+    var videoFit: Int
+        get() = sp.getInt("videoFit", 0)
+        set(v) = sp.edit().putInt("videoFit", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()
