@@ -129,7 +129,7 @@ class MultiViewActivity : AppCompatActivity() {
         t.label.text = "${c.num}  ${c.name}"
         var p = t.player
         if (p == null) {
-            p = PlayerFactory.build(this)
+            p = PlayerFactory.build(this, audioFocus = false)
             // Several decoders at once: cap each screen at HD to stay smooth on TV boxes.
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                 .setMaxVideoSize(if (count == 4) 1280 else 1920, if (count == 4) 720 else 1080)

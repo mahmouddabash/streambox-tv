@@ -191,7 +191,7 @@ class LiveActivity : AppCompatActivity() {
         previewId = c.id
         channelName.text = c.name
         previewHint.visibility = View.GONE
-        val player = previewPlayer ?: PlayerFactory.build(this).also {
+        val player = previewPlayer ?: PlayerFactory.build(this, audioFocus = false).also {
             previewPlayer = it
             previewView.player = it
         }

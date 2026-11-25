@@ -23,6 +23,8 @@ class App : Application(), coil.ImageLoaderFactory {
         com.streambox.tv.data.Downloads.recover(this)
         keepContentClearOfSystemBars()
         addTouchBackArrow()
+        Prefs.isTouchDevice = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN) &&
+            !packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
     }
 
     /**

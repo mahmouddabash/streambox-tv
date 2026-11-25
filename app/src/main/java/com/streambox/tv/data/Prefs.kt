@@ -437,6 +437,17 @@ object Prefs {
         get() = sp.getBoolean("softwareAudio", false)
         set(v) = sp.edit().putBoolean("softwareAudio", v).apply()
 
+    /**
+     * Mix surround sound down to stereo. On by default on touch screens (car units, phones, tablets),
+     * off on TVs, which usually feed a soundbar or receiver.
+     */
+    var stereoAudio: Boolean
+        get() = if (sp.contains("stereoAudio")) sp.getBoolean("stereoAudio", false) else isTouchDevice
+        set(v) = sp.edit().putBoolean("stereoAudio", v).apply()
+
+    @Volatile
+    var isTouchDevice = false
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

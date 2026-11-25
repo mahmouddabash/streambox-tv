@@ -164,6 +164,7 @@ class PlayerActivity : AppCompatActivity() {
     private var statsView: TextView? = null
     private var bandwidthBps = 0L
     private var droppedFrames = 0
+    private var audioDecoder = ""
     private val analytics = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
         override fun onBandwidthEstimate(
             eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
@@ -177,6 +178,13 @@ class PlayerActivity : AppCompatActivity() {
             dropped: Int, elapsedMs: Long
         ) {
             droppedFrames += dropped
+        }
+
+        override fun onAudioDecoderInitialized(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long
+        ) {
+            audioDecoder = decoderName
         }
     }
     private val statsTicker = object : Runnable {
@@ -226,6 +234,9 @@ class PlayerActivity : AppCompatActivity() {
             "Video      " + (if (v == null) "–" else "${v.width}×${v.height}" +
                 (if (v.frameRate > 0) String.format(java.util.Locale.US, " @ %.0f fps", v.frameRate) else "")),
             "Codec      " + (v?.sampleMimeType?.substringAfter('/') ?: "–") + " / " + (a?.sampleMimeType?.substringAfter('/') ?: "–"),
+            "Audio      " + (if (a == null) "–" else "${a.channelCount} ch, ${a.sampleRate / 1000} kHz" +
+                (if (audioDecoder.isNotEmpty()) "  (${audioDecoder.substringAfterLast('.')})" else "")) +
+                (if (Prefs.stereoAudio && (a?.channelCount ?: 0) > 2) " → stereo" else ""),
             "Bitrate    " + mbps(v?.bitrate?.toLong() ?: 0L),
             "Network    " + mbps(bandwidthBps),
             "Buffer     " + String.format(java.util.Locale.US, "%.1f s", p.totalBufferedDuration / 1000.0),

@@ -17,15 +17,67 @@ import com.streambox.tv.data.Net
 import com.streambox.tv.data.Prefs
 
 @OptIn(markerClass = [UnstableApi::class])
+/**
+ * Mixes surround sound (5.1, 7.1…) down to stereo when "Stereo sound" is on (default on car
+ * screens, phones and tablets). Many car audio systems accept only two channels and stay silent
+ * when sent six.
+ */
+@OptIn(markerClass = [UnstableApi::class])
+class StereoAwareRenderers(context: Context) : DefaultRenderersFactory(context) {
+    override fun buildAudioSink(
+        context: Context,
+        enableFloatOutput: Boolean,
+        enableAudioTrackPlaybackParams: Boolean
+    ): androidx.media3.exoplayer.audio.AudioSink? {
+        val b = androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+        if (Prefs.stereoAudio) {
+            val mixer = androidx.media3.common.audio.ChannelMixingAudioProcessor()
+            for (n in 1..8) mixer.putChannelMixingMatrix(toStereo(n))
+            b.setAudioProcessors(arrayOf(mixer))
+        }
+        return b.build()
+    }
+
+    /** Standard downmix of an n-channel layout (L R C LFE Ls Rs Lb Rb order) to left/right. */
+    private fun toStereo(n: Int): androidx.media3.common.audio.ChannelMixingMatrix {
+        val h = 0.7071f
+        val roles: List<Pair<Float, Float>> = when (n) {
+            1 -> listOf(1f to 1f)
+            2 -> listOf(1f to 0f, 0f to 1f)
+            3 -> listOf(1f to 0f, 0f to 1f, h to h)
+            4 -> listOf(1f to 0f, 0f to 1f, h to 0f, 0f to h)
+            5 -> listOf(1f to 0f, 0f to 1f, h to h, h to 0f, 0f to h)
+            6 -> listOf(1f to 0f, 0f to 1f, h to h, 0f to 0f, h to 0f, 0f to h)
+            7 -> listOf(1f to 0f, 0f to 1f, h to h, 0f to 0f, h to 0f, 0f to h, 0.5f to 0.5f)
+            else -> listOf(1f to 0f, 0f to 1f, h to h, 0f to 0f, h to 0f, 0f to h, h to 0f, 0f to h)
+        }
+        // Keep it loud but avoid clipping when every channel peaks at once.
+        val sum = roles.sumOf { it.first.toDouble() }.toFloat().coerceAtLeast(1f)
+        val scale = if (n <= 2) 1f else (1.4f / sum).coerceAtMost(1f)
+        val m = FloatArray(n * 2)
+        roles.forEachIndexed { i, (l, r) ->
+            m[i * 2] = l * scale
+            m[i * 2 + 1] = r * scale
+        }
+        return androidx.media3.common.audio.ChannelMixingMatrix(n, 2, m)
+    }
+}
+
 object PlayerFactory {
 
-    fun build(context: Context): ExoPlayer {
+    /**
+     * [audioFocus]: the main player asks Android for audio focus. Car systems mute apps that play
+     * without it; multi-screen tiles and previews don't ask, so they don't pause each other.
+     */
+    fun build(context: Context, audioFocus: Boolean = true): ExoPlayer {
         val http = OkHttpDataSource.Factory(Net.client).setUserAgent(Net.userAgent())
             .setCacheControl(okhttp3.CacheControl.FORCE_NETWORK)
         val dataSource = DefaultDataSource.Factory(context, http)
         // The device's own decoders first; StreamBox's software decoder fills the gaps (Dolby, DTS…).
         // "Software audio" (Settings) always uses it, for units whose own decoder plays silence.
-        val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        val renderers = StereoAwareRenderers(context).setEnableDecoderFallback(true)
             .setExtensionRendererMode(
                 if (Prefs.softwareAudio) DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
                 else DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
@@ -76,6 +128,13 @@ object PlayerFactory {
             .setTrackSelector(selector)
             .setBandwidthMeter(bandwidth)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                audioFocus
+            )
             .build()
         // Jump to the nearest key frame: seeks finish much faster than frame-exact ones.
         player.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
