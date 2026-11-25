@@ -326,7 +326,7 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
         player = p
-        playerView.player = p
+        playerView.player = withEpisodeButtons(p)
         PlayerFactory.styleSubtitles(playerView)
         p.addListener(listener)
         p.addAnalyticsListener(analytics)
@@ -520,8 +520,54 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The on-screen ⏮ ⏭ buttons: the video engine only knows the current episode, so they are
+     * routed to the episode / channel list (same as the remote's ⏮ ⏭ and channel keys).
+     */
+    private fun withEpisodeButtons(p: Player): Player = object : androidx.media3.common.ForwardingPlayer(p) {
+        private val nav = setOf(
+            Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
+            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
+        )
+        private fun multi() = items.size > 1
+        private fun hasNext() = multi() && (current.isLive || index < items.size - 1)
+        private fun hasPrev() = multi() && (current.isLive || index > 0)
+
+        override fun getAvailableCommands(): Player.Commands {
+            val b = super.getAvailableCommands().buildUpon()
+            if (hasNext()) b.add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            if (hasPrev()) b.add(Player.COMMAND_SEEK_TO_PREVIOUS).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            return b.build()
+        }
+
+        override fun isCommandAvailable(command: Int): Boolean = when (command) {
+            Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> hasNext() || super.isCommandAvailable(command)
+            Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> hasPrev() || super.isCommandAvailable(command)
+            else -> super.isCommandAvailable(command)
+        }
+
+        override fun hasNextMediaItem() = hasNext() || super.hasNextMediaItem()
+        override fun hasPreviousMediaItem() = hasPrev() || super.hasPreviousMediaItem()
+        override fun seekToNext() = if (multi()) go(1) else super.seekToNext()
+        override fun seekToNextMediaItem() = if (multi()) go(1) else super.seekToNextMediaItem()
+        override fun seekToPrevious() = if (multi()) go(-1) else super.seekToPrevious()
+        override fun seekToPreviousMediaItem() = if (multi()) go(-1) else super.seekToPreviousMediaItem()
+
+        private fun go(d: Int) {
+            handler.post {
+                savePosition()
+                zap(d)
+            }
+        }
+    }
+
     private fun zap(delta: Int) {
         if (items.size < 2) return
+        // Episodes and films don't wrap around: say so at the ends of the list.
+        if (!current.isLive && (index + delta !in items.indices)) {
+            toast(if (delta > 0) "This is the last episode" else "This is the first episode")
+            return
+        }
         rememberPrevious()
         index = (index + delta + items.size) % items.size
         startItem(resume = false)

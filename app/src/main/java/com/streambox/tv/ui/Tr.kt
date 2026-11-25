@@ -407,6 +407,8 @@ object Tr {
         "Audio decoding" to "فك ترميز الصوت",
         "Stereo sound" to "صوت ستيريو",
         "Video fit" to "ملاءمة الفيديو",
+        "This is the last episode" to "هذه آخر حلقة",
+        "This is the first episode" to "هذه أول حلقة",
         "Original" to "الأصلي",
         "Fill screen" to "ملء الشاشة",
         "Zoom 115%" to "تكبير 115%",
