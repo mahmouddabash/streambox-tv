@@ -23,7 +23,13 @@ object PlayerFactory {
         val http = OkHttpDataSource.Factory(Net.client).setUserAgent(Net.userAgent())
             .setCacheControl(okhttp3.CacheControl.FORCE_NETWORK)
         val dataSource = DefaultDataSource.Factory(context, http)
+        // The device's own decoders first; StreamBox's software decoder fills the gaps (Dolby, DTS…).
+        // "Software audio" (Settings) always uses it, for units whose own decoder plays silence.
         val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+            .setExtensionRendererMode(
+                if (Prefs.softwareAudio) DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                else DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+            )
 
         // Pick the best picture: no size cap (4K screens included), prefer the highest-bitrate
         // variant, and assume a fast connection so playback starts sharp instead of ramping up.

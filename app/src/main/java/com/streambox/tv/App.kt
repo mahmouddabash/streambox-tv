@@ -22,6 +22,50 @@ class App : Application(), coil.ImageLoaderFactory {
         com.streambox.tv.ui.Tr.init(this)
         com.streambox.tv.data.Downloads.recover(this)
         keepContentClearOfSystemBars()
+        addTouchBackArrow()
+    }
+
+    /**
+     * Touch screens (phones, tablets, car head units) have no remote Back button: show a back arrow
+     * in the top corner of every screen except Home. TVs (leanback) don't get it.
+     */
+    private fun addTouchBackArrow() {
+        val pm = packageManager
+        if (!pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN) ||
+            pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+        ) return
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(a: android.app.Activity) {
+                if (a is com.streambox.tv.ui.HomeActivity) return
+                val content = a.findViewById<android.widget.FrameLayout>(android.R.id.content) ?: return
+                if (content.findViewWithTag<android.view.View>("sb_back") != null) return
+                val d = a.resources.displayMetrics.density
+                val btn = android.widget.ImageButton(a).apply {
+                    tag = "sb_back"
+                    setImageResource(R.drawable.ic_back_arrow)
+                    contentDescription = "Back"
+                    isFocusable = false // the remote's D-pad never lands on it
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.OVAL
+                        setColor(0x88000000.toInt())
+                    }
+                    elevation = 24 * d
+                    setOnClickListener {
+                        (a as? androidx.activity.ComponentActivity)?.onBackPressedDispatcher?.onBackPressed() ?: a.finish()
+                    }
+                }
+                val size = (48 * d).toInt()
+                content.addView(btn, android.widget.FrameLayout.LayoutParams(size, size, android.view.Gravity.TOP or android.view.Gravity.START).apply {
+                    setMargins((10 * d).toInt(), (10 * d).toInt(), 0, 0)
+                })
+            }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityResumed(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivityStopped(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
     }
 
     /**

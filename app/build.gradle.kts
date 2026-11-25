@@ -88,6 +88,9 @@ dependencies {
     implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.media3:media3-effect:1.5.1")
+    // Software audio decoding (Dolby AC3/E-AC3, DTS, TrueHD…) for devices without those decoders,
+    // such as most car head units. Version follows Media3.
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.1+1")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")

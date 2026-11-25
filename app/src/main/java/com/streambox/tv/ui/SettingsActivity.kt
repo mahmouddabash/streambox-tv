@@ -68,6 +68,12 @@ class SettingsActivity : AppCompatActivity() {
         if (com.streambox.tv.BuildConfig.SELF_UPDATE) rows.add(Row("Check for updates", "Installed: build ${com.streambox.tv.data.Updater.currentBuild}. Checked automatically once a day") {
             com.streambox.tv.data.Updater.check(this, lifecycleScope, quiet = false)
         })
+        rows.add(Row("Audio decoding", if (Prefs.softwareAudio) "StreamBox decoder (use this if there's no sound, e.g. in a car)" else "Automatic (device first, StreamBox decoder for Dolby/DTS)") {
+            choose("Audio decoding", arrayOf("Automatic (recommended)", "Always use the StreamBox decoder (no sound? try this)"), if (Prefs.softwareAudio) 1 else 0) {
+                Prefs.softwareAudio = it == 1
+                refresh()
+            }
+        })
         rows.add(Row("Picture mode", PictureMode.of(Prefs.pictureMode).label) {
             val modes = PictureMode.values()
             choose("Picture mode", modes.map { it.label }.toTypedArray(), modes.indexOf(PictureMode.of(Prefs.pictureMode))) {

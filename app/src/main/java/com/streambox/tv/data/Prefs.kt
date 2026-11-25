@@ -432,6 +432,11 @@ object Prefs {
         get() = sp.getInt("downloadStorage", 0)
         set(v) = sp.edit().putInt("downloadStorage", v).apply()
 
+    /** Always decode audio in software (car units / boxes with no sound on Dolby channels). */
+    var softwareAudio: Boolean
+        get() = sp.getBoolean("softwareAudio", false)
+        set(v) = sp.edit().putBoolean("softwareAudio", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()
