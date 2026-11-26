@@ -59,7 +59,7 @@ class HomeActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ Model
 
-    private enum class Kind { MOVIE, SERIES, CHANNEL }
+    private enum class Kind { MOVIE, SERIES, CHANNEL, DOWNLOAD }
 
     private class Card(
         val kind: Kind,
@@ -320,6 +320,14 @@ class HomeActivity : AppCompatActivity() {
         }
         Repo.recentChannelList().takeIf { it.isNotEmpty() }
             ?.let { out.add(Row("Recently watched channels", it.map(::channelCard))) }
+        // Downloaded films and episodes, one click to watch offline (not for Kids profiles).
+        if (!Repo.kidsMode) {
+            com.streambox.tv.data.Downloads.all()
+                .filter { it.profileId == Repo.profileId && it.status == com.streambox.tv.data.Downloads.DONE && java.io.File(it.file).exists() }
+                .sortedByDescending { it.addedAt }.take(30)
+                .takeIf { it.isNotEmpty() }
+                ?.let { list -> out.add(Row("Downloaded", list.map { Card(Kind.DOWNLOAD, it.id, it.title, it.poster, "⬇") })) }
+        }
         Repo.watchLater().takeIf { it.isNotEmpty() }?.let { list ->
             out.add(Row("Watch later", list.map { if (it is Movie) movieCard(it) else seriesCard(it as Series) }))
         }
@@ -385,6 +393,10 @@ class HomeActivity : AppCompatActivity() {
         heroMeta.text = ""
         heroPlot.text = ""
         when (card.kind) {
+            Kind.DOWNLOAD -> {
+                heroMeta.text = Tr.s("Ready to watch offline")
+                setHeroImage(card.image)
+            }
             Kind.MOVIE -> {
                 val m = Repo.movie(card.id) ?: return
                 val cached = Repo.cachedMovieInfo(m)
@@ -479,8 +491,48 @@ class HomeActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ Actions
 
+    /** Hold OK on a card: remove it from Continue watching / Watch later, or manage a download. */
+    private fun cardMenu(card: Card, row: Row) {
+        val opts = ArrayList<Pair<String, () -> Unit>>()
+        when {
+            row.title == "Continue watching" && card.kind != Kind.DOWNLOAD -> opts.add("✕  Remove from Continue watching" to {
+                if (card.kind == Kind.MOVIE) Repo.forgetProgress(Repo.movie(card.id), null)
+                else Repo.forgetProgress(null, Repo.seriesItem(card.id))
+                buildRows()
+                restoreFocus()
+            })
+            row.title == "Watch later" -> opts.add("✕  Remove from Watch later" to {
+                Prefs.setWatchLater(Repo.userKey, (if (card.kind == Kind.MOVIE) "m:" else "s:") + card.id, false)
+                buildRows()
+                restoreFocus()
+            })
+            card.kind == Kind.DOWNLOAD -> {
+                opts.add("🗑  Delete download" to {
+                    com.streambox.tv.data.Downloads.delete(this, card.id)
+                    buildRows()
+                    restoreFocus()
+                })
+                opts.add("⬇  Open Downloads" to { startActivity(Intent(this, DownloadsActivity::class.java)) })
+            }
+        }
+        if (opts.isEmpty()) return
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(card.title)
+            .setItems(opts.map { Tr.s(it.first) }.toTypedArray()) { _, w -> opts[w].second() }
+            .show()
+    }
+
     private fun open(card: Card, row: Row) {
         when (card.kind) {
+            Kind.DOWNLOAD -> {
+                val d = com.streambox.tv.data.Downloads.get(card.id) ?: return
+                val f = java.io.File(d.file)
+                if (!f.exists()) {
+                    toast("The file is missing (USB drive unplugged?)")
+                    return
+                }
+                Ui.play(this, listOf(PlayItem(d.key, d.title, com.streambox.tv.data.Downloads.playUri(f), false)), 0)
+            }
             Kind.MOVIE -> startActivity(Intent(this, MovieDetailActivity::class.java).putExtra(MovieDetailActivity.EXTRA_ID, card.id))
             Kind.SERIES -> startActivity(Intent(this, SeriesDetailActivity::class.java).putExtra(SeriesDetailActivity.EXTRA_ID, card.id))
             Kind.CHANNEL -> {
@@ -554,6 +606,7 @@ class HomeActivity : AppCompatActivity() {
             if (card.progress >= 0) holder.resume.progress = card.progress
 
             holder.itemView.setOnClickListener { open(card, row) }
+            holder.itemView.setOnLongClickListener { cardMenu(card, row); true }
             holder.itemView.setOnFocusChangeListener { _, has ->
                 if (has) {
                     focusRow = rowIndex

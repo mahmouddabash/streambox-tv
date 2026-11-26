@@ -93,7 +93,8 @@ object Repo {
     fun urlFor(c: Channel): String {
         if (c.url.isNotEmpty()) return c.url
         val p = profile ?: return ""
-        return "${p.server}/live/${p.username}/${p.password}/${c.id}.${Prefs.streamFormat}"
+        val ext = Prefs.channelFormat(c.id).ifEmpty { Prefs.streamFormat }
+        return "${p.server}/live/${p.username}/${p.password}/${c.id}.$ext"
     }
 
     fun urlFor(m: Movie): String {
@@ -619,6 +620,10 @@ object Repo {
             .filter { it.categoryId !in locked }.take(limit)
     }
 
+    /** Watched to the end, or only the closing credits are left (the last 5 minutes past 85 %). */
+    fun isFinished(pos: Long, dur: Long): Boolean =
+        dur > 0 && (pos > dur * 0.95 || (dur >= 20 * 60_000L && pos >= dur * 0.85 && dur - pos <= 5 * 60_000L))
+
     /** One entry per title being watched: a movie, or a series with an episode in progress. */
     data class Resume(val movie: Movie?, val series: Series?, val key: String)
 
@@ -632,6 +637,7 @@ object Repo {
         val out = ArrayList<Resume>()
         for (k in Prefs.resumeIds("")) {
             if (out.size >= limit) break
+            if (isFinished(Prefs.position(k), Prefs.duration(k))) continue // only the credits were left
             when {
                 k.startsWith(movieKey) -> movieById[k.removePrefix(movieKey)]
                     ?.takeIf { it.categoryId !in lockedVod }

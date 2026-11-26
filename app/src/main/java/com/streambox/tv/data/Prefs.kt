@@ -502,6 +502,13 @@ object Prefs {
         get() = sp.getString("widgetChannels", "") ?: ""
         set(v) = sp.edit().putString("widgetChannels", v).apply()
 
+    /** Stream type that worked for a channel ("ts" / "m3u8"), when it differs from the usual one. */
+    fun channelFormat(channelId: String): String = sp.getString("chfmt_$channelId", "") ?: ""
+
+    fun setChannelFormat(channelId: String, ext: String) {
+        sp.edit().apply { if (ext.isEmpty() || ext == streamFormat) remove("chfmt_$channelId") else putString("chfmt_$channelId", ext) }.apply()
+    }
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

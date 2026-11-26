@@ -474,7 +474,20 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    /** A live channel keeps failing: try its other stream type (TS ⇄ HLS) once before giving up. */
+    private fun tryOtherFormat(): Boolean {
+        if (triedAltExt || shiftStartMs > 0) return false
+        val alt = altExtensionUrl(attemptUrl) ?: return false
+        triedAltExt = true
+        retries = 0
+        errorView.text = "This channel isn't responding. Trying another stream type…"
+        errorView.visibility = View.VISIBLE
+        load(alt, null)
+        return true
+    }
+
     private fun fail(error: PlaybackException) {
+        if (current.isLive && tryOtherFormat()) return
         failed = true
         val item = current
         val r = firstProbe
@@ -515,7 +528,7 @@ class PlayerActivity : AppCompatActivity() {
         val pos = p.currentPosition
         val dur = p.duration
         when {
-            dur != C.TIME_UNSET && dur > 0 && pos > dur * 0.95 -> Prefs.setPosition(item.key, 0L)
+            dur != C.TIME_UNSET && Repo.isFinished(pos, dur) -> Prefs.setPosition(item.key, 0L)
             pos > 10_000L -> Prefs.setPosition(item.key, pos, if (dur != C.TIME_UNSET) dur else 0L)
         }
     }
@@ -903,6 +916,11 @@ class PlayerActivity : AppCompatActivity() {
                 retries = 0
                 failed = false
                 errorView.visibility = View.GONE
+                // The other stream type worked for this channel: use it straight away next time.
+                if (current.isLive && triedAltExt && shiftStartMs <= 0 && current.channelId.isNotEmpty()) {
+                    val ext = attemptUrl.substringBefore('?').substringAfterLast('.', "").lowercase()
+                    if (ext == "ts" || ext == "m3u8") Prefs.setChannelFormat(current.channelId, ext)
+                }
             } else if (state == Player.STATE_ENDED) {
                 val item = current
                 if (item.isLive && shiftStartMs > 0) {
@@ -934,6 +952,10 @@ class PlayerActivity : AppCompatActivity() {
                 recover(error)
             } else if (isParsingError(error)) {
                 fail(error)
+            } else if (item.isLive && !triedAltExt &&
+                (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || retries >= 2) && tryOtherFormat()
+            ) {
+                // handled: trying the channel's other stream type (TS ⇄ HLS)
             } else if ((item.isLive || error.errorCode in 2000..2999) && retries < 5) {
                 retries++
                 errorView.text = "Connection lost. Reconnecting… ($retries/5)"
