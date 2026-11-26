@@ -226,12 +226,27 @@ object Prefs {
         get() = sp.getInt("recStorage", 0)
         set(v) = sp.edit().putInt("recStorage", v).apply()
 
+    /**
+     * Accepts either TMDB credential: the 32-character API key, or the long "Read Access Token"
+     * (whose "aud" field is that same API key).
+     */
+    private fun v3Key(s: String): String {
+        val t = s.trim()
+        if (!t.startsWith("eyJ") || t.count { it == '.' } != 2) return t
+        return try {
+            val body = String(android.util.Base64.decode(t.split('.')[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING))
+            JSONObject(body).optString("aud").ifBlank { t }
+        } catch (_: Exception) {
+            t
+        }
+    }
+
     /** A key typed in Settings (the built-in one is never shown). */
     val ownTmdbKey: String get() = sp.getString("tmdbKey", "") ?: ""
 
     /** The TMDB key typed in Settings, else the one built into the app. */
     var tmdbKey: String
-        get() = (sp.getString("tmdbKey", "") ?: "").ifBlank {
+        get() = v3Key(sp.getString("tmdbKey", "") ?: "").ifBlank {
             if (Secret.TMDB_KEY.isEmpty()) "" else try { Secret.reveal(Secret.TMDB_KEY) } catch (_: Exception) { "" }
         }
         set(v) = sp.edit().putString("tmdbKey", v.trim()).apply()

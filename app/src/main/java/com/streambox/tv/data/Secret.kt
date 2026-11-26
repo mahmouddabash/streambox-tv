@@ -13,7 +13,7 @@ object Secret {
     internal const val DEFAULT_USER = "IBVCU1Ff"
     internal const val DEFAULT_PASS = "Y0VCU1hUdVZOFgY="
     /** Built-in TMDB key (scrambled); "" = none, then only a key typed in Settings is used. */
-    internal const val TMDB_KEY = ""
+    internal const val TMDB_KEY = "MBJBUQdZIF5KFwpVUAYcTUVqFUYHUFQgDEwSAwUBA08="
     private const val PASSWORD_HASH = "a4f78b341e985db84d1dba705c6cfba390e141d17bb9605dbd34696713377cd1"
 
     fun reveal(s: String): String {
