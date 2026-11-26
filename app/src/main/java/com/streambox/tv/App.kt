@@ -24,7 +24,7 @@ class App : Application(), coil.ImageLoaderFactory {
         keepContentClearOfSystemBars()
         addTouchBackArrow()
         addNightMode()
-        Prefs.isTouchDevice = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN) &&
+        Prefs.detectedTouch = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN) &&
             !packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
     }
 
@@ -71,15 +71,17 @@ class App : Application(), coil.ImageLoaderFactory {
      * in the top corner of every screen except Home. TVs (leanback) don't get it.
      */
     private fun addTouchBackArrow() {
-        val pm = packageManager
-        if (!pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN) ||
-            pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
-        ) return
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(a: android.app.Activity) {
-                if (a is com.streambox.tv.ui.HomeActivity) return
+                if (a is com.streambox.tv.ui.HomeActivity || a is com.streambox.tv.ui.SplashActivity) return
                 val content = a.findViewById<android.widget.FrameLayout>(android.R.id.content) ?: return
-                if (content.findViewWithTag<android.view.View>("sb_back") != null) return
+                val existing = content.findViewWithTag<android.view.View>("sb_back")
+                // Only in touch mode (chosen on first start, Settings → Device type).
+                if (!Prefs.isTouchDevice) {
+                    existing?.let { content.removeView(it) }
+                    return
+                }
+                if (existing != null) return
                 val d = a.resources.displayMetrics.density
                 val btn = android.widget.ImageButton(a).apply {
                     tag = "sb_back"

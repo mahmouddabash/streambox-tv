@@ -165,6 +165,12 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         })
+        rows.add(Row("Device type", if (Prefs.isTouchDevice) "Touch screen (car, phone, tablet): back arrows, swipe and tap controls" else "TV with a remote control") {
+            choose("Device type", arrayOf("TV with a remote control", "Touch screen (car, phone, tablet)"), if (Prefs.isTouchDevice) 1 else 0) {
+                Prefs.deviceMode = if (it == 1) "touch" else "tv"
+                recreate()
+            }
+        })
         val nightOpts = arrayOf("Off", "At night (22:00 – 06:00)", "Always")
         rows.add(Row("Night mode", nightOpts[Prefs.nightMode.coerceIn(0, 2)] + "   •   " + "a softer, darker screen") {
             choose("Night mode", nightOpts, Prefs.nightMode.coerceIn(0, 2)) {

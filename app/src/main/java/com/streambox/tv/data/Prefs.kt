@@ -445,8 +445,22 @@ object Prefs {
         get() = if (sp.contains("stereoAudio")) sp.getBoolean("stereoAudio", false) else isTouchDevice
         set(v) = sp.edit().putBoolean("stereoAudio", v).apply()
 
+    /** "tv" (remote control) or "touch" (car screen, phone, tablet), chosen on first start; "" = not yet. */
+    var deviceMode: String
+        get() = sp.getString("deviceMode", "") ?: ""
+        set(v) = sp.edit().putString("deviceMode", v).apply()
+
+    /** What the hardware looks like (touch screen and not a TV), used until a choice is made. */
     @Volatile
-    var isTouchDevice = false
+    var detectedTouch = false
+
+    /** Touch layout and controls (back arrows, gestures, stereo sound by default…). */
+    val isTouchDevice: Boolean
+        get() = when (deviceMode) {
+            "touch" -> true
+            "tv" -> false
+            else -> detectedTouch
+        }
 
     /** Video fit chosen in the player: 0 Fit, 1 Stretch, 2 Zoom (remembered). */
     var videoFit: Int

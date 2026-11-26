@@ -19,6 +19,22 @@ class SplashActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var done = false
 
+    private fun askDeviceType(then: () -> Unit) {
+        val tv = "📺  " + Tr.s("TV with a remote control")
+        val touch = "📱  " + Tr.s("Touch screen (car, phone, tablet)")
+        val rec = "   (" + Tr.s("recommended") + ")"
+        // The option that matches this device comes first and is marked.
+        val opts = if (Prefs.detectedTouch) listOf("touch" to touch + rec, "tv" to tv) else listOf("tv" to tv + rec, "touch" to touch)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(Tr.s("How will you use StreamBox on this device?"))
+            .setItems(opts.map { it.second }.toTypedArray()) { _, w ->
+                Prefs.deviceMode = opts[w].first
+                then()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
@@ -52,6 +68,15 @@ class SplashActivity : AppCompatActivity() {
 
     private fun next() {
         if (done || isFinishing) return
+        // First start: TV with a remote, or a touch screen (car, phone, tablet)?
+        if (Prefs.deviceMode.isEmpty()) {
+            done = true
+            askDeviceType {
+                done = false
+                next()
+            }
+            return
+        }
         done = true
         val profiles = Intent(this, ProfilesActivity::class.java)
         val last = Prefs.profiles().firstOrNull { it.id == Prefs.lastProfileId }
