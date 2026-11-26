@@ -146,6 +146,22 @@ class ViewersActivity : AppCompatActivity() {
                 }
             })
             opts.add("🙂  Change picture" to { pickAvatar(v) })
+            if (v.kids) {
+                val lim = Prefs.kidsLimit(v.id)
+                opts.add(("⏱  " + Tr.s("Daily limit") + ": " + if (lim == 0) Tr.s("none") else "${lim / 60}h ${lim % 60}m") to {
+                    val mins = intArrayOf(0, 30, 60, 90, 120, 180)
+                    val labels = mins.map { if (it == 0) Tr.s("No limit") else "${it / 60}h ${it % 60}m" }.toTypedArray()
+                    AlertDialog.Builder(this).setTitle(Tr.s("Daily limit"))
+                        .setItems(labels) { _, w -> Prefs.setKidsLimit(v.id, mins[w]); build() }.show()
+                })
+                val bed = Prefs.kidsBedtime(v.id)
+                opts.add(("🌙  " + Tr.s("Bedtime") + ": " + if (bed < 0) Tr.s("none") else "%02d:00 – 06:00".format(bed)) to {
+                    val hours = intArrayOf(-1, 19, 20, 21, 22, 23)
+                    val labels = hours.map { if (it < 0) Tr.s("No bedtime") else "%02d:00 – 06:00".format(it) }.toTypedArray()
+                    AlertDialog.Builder(this).setTitle(Tr.s("Bedtime"))
+                        .setItems(labels) { _, w -> Prefs.setKidsBedtime(v.id, hours[w]); build() }.show()
+                })
+            }
             if (!isMain) {
                 opts.add((if (v.kids) "👤  Make a normal profile" else "🧒  Make a Kids profile") to {
                     saveViewer(v.copy(kids = !v.kids))

@@ -591,6 +591,7 @@ class DownloadService : Service() {
                             bytes = c.doFinal(bytes)
                         }
                         val at = file.length()
+                        Prefs.addDataUsed(bytes.size.toLong(), Net.isMobileData(this@DownloadService))
                         out.write(bytes)
                         out.flush()
                         idx.appendText("${s.dur} $at ${bytes.size}\n")

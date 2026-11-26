@@ -113,7 +113,38 @@ object Net {
      * System DNS first. If the TV's/router's resolver can't find the host, ask public resolvers
      * directly over UDP, then over HTTPS. The error lists why each step failed.
      */
+    /** Forget remembered addresses (after changing the DNS setting). */
+    fun clearDnsCache() = FallbackDns.clear()
+
+    /** How long one lookup of [host] takes with the current DNS setting, or null when it fails. */
+    fun dnsLookupMs(host: String): Long? = try {
+        FallbackDns.clear()
+        val t = System.nanoTime()
+        FallbackDns.lookup(host)
+        (System.nanoTime() - t) / 1_000_000
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Is the active connection Wi-Fi/Ethernet (false) or mobile data / a phone hotspot (true)? Checked at most once a minute. */
+    @Volatile private var meteredAt = 0L
+    @Volatile private var meteredNow = false
+    fun isMobileData(context: android.content.Context): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - meteredAt > 60_000L) {
+            meteredNow = try {
+                (context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
+            } catch (_: Exception) {
+                false
+            }
+            meteredAt = now
+        }
+        return meteredNow
+    }
+
     private object FallbackDns : Dns {
+        fun clear() = cache.clear()
+
         private const val TTL = 10 * 60_000L
         private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<InetAddress>>>()
         /** When the TV's own DNS failed recently we skip it, instead of waiting for it to time out on every request. */
@@ -134,6 +165,14 @@ object Net {
                 try { return Dns.SYSTEM.lookup(hostname) } catch (_: Exception) { }
             }
             val why = ArrayList<String>()
+            // Private DNS chosen in Network Center: ask it first, fall back to the usual order.
+            if (Prefs.dnsMode in 1..2) {
+                try {
+                    dohResolvers[Prefs.dnsMode - 1].lookup(hostname).let { if (it.isNotEmpty()) return it }
+                } catch (e: Exception) {
+                    why.add("private dns: ${e.javaClass.simpleName}")
+                }
+            }
             val skipSystem = System.currentTimeMillis() - systemFailedAt < TTL
             fun attempt(label: String, block: () -> List<InetAddress>): List<InetAddress>? =
                 try {

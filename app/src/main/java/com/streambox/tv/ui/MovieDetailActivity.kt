@@ -93,6 +93,7 @@ class MovieDetailActivity : AppCompatActivity() {
                 }
                 if (plot.text.isNullOrBlank() && t.overview.isNotBlank()) plot.text = t.overview
                 if (t.cast.isNotEmpty()) showCast(t.cast)
+                if (t.collectionId.isNotEmpty()) showCollection(m, t.collectionId, t.collectionName)
             }
             val parts = ArrayList<String>()
             val rating = info.rating.ifBlank { m.rating }
@@ -146,6 +147,36 @@ class MovieDetailActivity : AppCompatActivity() {
         val offline = com.streambox.tv.data.Downloads.offlineFile(key)
         val url = offline?.let { com.streambox.tv.data.Downloads.playUri(it) } ?: Repo.urlFor(movie)
         Ui.play(this, listOf(PlayItem(key, movie.name, url, false)), 0, fromStart)
+    }
+
+    /** "Fast & Furious Collection (5)": the other films of the franchise that your provider has. */
+    private fun showCollection(m: com.streambox.tv.data.Movie, id: String, name: String) {
+        lifecycleScope.launch {
+            val titles = com.streambox.tv.data.Tmdb.collection(id)
+            if (titles.isEmpty()) return@launch
+            val films = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                fun n(s: String) = com.streambox.tv.data.Tmdb.cleanTitle(s).first.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+                val idx = Repo.moviesIn(Repo.CAT_ALL).groupBy { n(it.name) }
+                val out = LinkedHashSet<com.streambox.tv.data.Movie>()
+                for ((t, _) in titles) idx[n(t)]?.firstOrNull()?.let { out.add(it) }
+                out.toList()
+            }
+            if (films.size < 2) return@launch
+            val b = android.widget.Button(this@MovieDetailActivity, null, 0, R.style.Btn)
+            b.text = "🎞  $name (${films.size})"
+            b.setOnClickListener {
+                androidx.appcompat.app.AlertDialog.Builder(this@MovieDetailActivity)
+                    .setTitle(name)
+                    .setItems(films.map { (if (it.id == m.id) "▶ " else "    ") + it.name }.toTypedArray()) { _, w ->
+                        if (films[w].id != m.id) startActivity(
+                            android.content.Intent(this@MovieDetailActivity, MovieDetailActivity::class.java).putExtra(EXTRA_ID, films[w].id)
+                        )
+                    }
+                    .show()
+            }
+            val parent = btnFav.parent as? android.view.ViewGroup ?: return@launch
+            parent.addView(b, parent.indexOfChild(btnFav) + 1, android.view.ViewGroup.LayoutParams(btnFav.layoutParams))
+        }
     }
 
     companion object {

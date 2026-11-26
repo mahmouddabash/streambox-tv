@@ -17,7 +17,9 @@ object Tmdb {
         val overview: String = "",
         val cast: List<Person> = emptyList(),
         val trailer: String = "",
-        val rating: String = ""
+        val rating: String = "",
+        val collectionId: String = "",
+        val collectionName: String = ""
     )
 
     private const val IMG = "https://image.tmdb.org/t/p/"
@@ -86,12 +88,30 @@ object Tmdb {
                 overview = o.optString("overview", ""),
                 cast = cast,
                 trailer = trailer,
-                rating = if (vote > 0) String.format(java.util.Locale.US, "%.1f", vote) else ""
+                rating = if (vote > 0) String.format(java.util.Locale.US, "%.1f", vote) else "",
+                collectionId = o.optJSONObject("belongs_to_collection")?.optString("id").orEmpty(),
+                collectionName = o.optJSONObject("belongs_to_collection")?.optString("name").orEmpty()
             )
             cache[key] = d
             d
         } catch (_: Exception) {
             null
+        }
+    }
+
+    /** Films in a TMDB collection (franchise), in release order: (title, year). */
+    suspend fun collection(id: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        if (!enabled || id.isBlank()) return@withContext emptyList()
+        try {
+            val u = "https://api.themoviedb.org/3/collection/$id".toHttpUrl().newBuilder()
+                .addQueryParameter("api_key", Prefs.tmdbKey).build()
+            val parts = JSONObject(get(u.toString())).optJSONArray("parts") ?: return@withContext emptyList()
+            (0 until parts.length()).map { parts.getJSONObject(it) }
+                .sortedBy { it.optString("release_date") }
+                .flatMap { p -> listOf(p.optString("title"), p.optString("original_title")).filter { it.isNotBlank() }.distinct()
+                    .map { it to p.optString("release_date").take(4) } }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

@@ -366,6 +366,7 @@ class PlayerActivity : AppCompatActivity() {
                 }
             } else stuckMs = 0
             lastPos = p.currentPosition
+            if (p.isPlaying) checkKidsTime(3000)
             // Viewing stats (Settings → Viewing stats).
             if (p.isPlaying && items.isNotEmpty()) {
                 val kind = when {
@@ -376,6 +377,64 @@ class PlayerActivity : AppCompatActivity() {
                 Prefs.addWatchTime(Repo.userKey, kind, if (current.isLive) current.channelId else "", 3000)
             }
             handler.postDelayed(this, 3000)
+        }
+    }
+
+    /** Kids profiles: daily limit and bedtime. When reached, playback pauses until a parent enters the PIN. */
+    private var kidsAsking = false
+
+    private fun checkKidsTime(addMs: Long) {
+        if (!Repo.kidsMode || kidsAsking) return
+        val id = Prefs.currentViewer(Repo.profileId)
+        if (id.isEmpty()) return
+        Prefs.addKidsUsed(id, addMs)
+        if (System.currentTimeMillis() < Prefs.kidsUnlockedUntil) return
+        val limit = Prefs.kidsLimit(id)
+        val bed = Prefs.kidsBedtime(id)
+        val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val bedtime = bed >= 0 && (h >= bed || h < 6)
+        val overLimit = limit > 0 && Prefs.kidsUsedMs(id) >= limit * 60_000L
+        if (!bedtime && !overLimit) return
+        kidsAsking = true
+        player?.pause()
+        AlertDialog.Builder(this)
+            .setTitle(Tr.s(if (bedtime) "🌙  It's bedtime" else "⏱  Time's up for today"))
+            .setMessage(Tr.s("A parent can enter the PIN to keep watching for one more hour."))
+            .setCancelable(false)
+            .setPositiveButton(Tr.s("Enter PIN")) { _, _ ->
+                Ui.askPin(this) {
+                    Prefs.kidsUnlockedUntil = System.currentTimeMillis() + 3_600_000L
+                    kidsAsking = false
+                    player?.play()
+                }
+            }
+            .setNegativeButton(Tr.s("Close")) { _, _ ->
+                kidsAsking = false
+                finish()
+            }
+            .show()
+    }
+
+    // ---------------------------------------------------------------- Refresh-rate matching
+    /** Switch the TV to a refresh rate that is a whole multiple of the video's frame rate (24/25/50/60 Hz…). */
+    private fun matchFrameRate() {
+        val p = player ?: return
+        val pref = Prefs.matchFrameRate
+        if (pref == 0 || (pref == 1 && current.isLive) || Prefs.isTouchDevice) return
+        val fps = p.videoFormat?.frameRate ?: return
+        if (fps <= 1f) return
+        try {
+            @Suppress("DEPRECATION")
+            val display = if (android.os.Build.VERSION.SDK_INT >= 30) this.display ?: return else windowManager.defaultDisplay
+            val cur = display.mode
+            val best = display.supportedModes
+                .filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight && it.refreshRate <= 61f }
+                .filter { m -> val r = m.refreshRate / fps; r >= 0.99f && kotlin.math.abs(r - kotlin.math.round(r)) < 0.012f }
+                .maxByOrNull { it.refreshRate } ?: return
+            if (best.modeId != cur.modeId && window.attributes.preferredDisplayModeId != best.modeId) {
+                window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+            }
+        } catch (_: Exception) {
         }
     }
 
@@ -410,6 +469,17 @@ class PlayerActivity : AppCompatActivity() {
             droppedFrames += dropped
         }
 
+        override fun onLoadCompleted(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo,
+            mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData
+        ) {
+            // Monthly data use (Network Center). Local files don't count.
+            if (!loadEventInfo.uri.scheme.equals("file", true)) {
+                Prefs.addDataUsed(loadEventInfo.bytesLoaded, com.streambox.tv.data.Net.isMobileData(this@PlayerActivity))
+            }
+        }
+
         override fun onAudioDecoderInitialized(
             eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
             decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long
@@ -422,6 +492,39 @@ class PlayerActivity : AppCompatActivity() {
             updateStats()
             if (statsOn) handler.postDelayed(this, 1000)
         }
+    }
+
+    /** Looks at what the player measured and explains, in plain words, the likely cause of buffering. */
+    private fun streamDoctor() {
+        val p = player ?: return
+        val v = p.videoFormat
+        val need = (v?.bitrate ?: 0).toLong()
+        val have = bandwidthBps
+        val buf = p.totalBufferedDuration / 1000.0
+        val mobile = com.streambox.tv.data.Net.isMobileData(this)
+        val a = Repo.account
+        val max = a.maxConnections.toIntOrNull() ?: 0
+        val active = a.activeConnections.toIntOrNull() ?: 0
+        val findings = ArrayList<String>()
+        if (max in 1..active) findings.add("• Your provider allows $max connection(s) and $active is in use. Another device (or a download) may be using it: stop it.")
+        if (need > 0 && have > 0 && have < need * 1.3)
+            findings.add(String.format(java.util.Locale.US, "• Your connection to the provider gives about %.1f Mbps, but this stream needs about %.1f Mbps. Choose a lower quality (HD/SD) or move closer to the router.", have / 1e6, need / 1e6))
+        if (have in 1..3_000_000) findings.add("• The connection is slow right now. Network Center → Speed test shows how fast it really is.")
+        if (retries + stallReconnects >= 2) findings.add("• The stream dropped ${retries + stallReconnects} times. That points to the provider's server; it usually recovers by itself, or try the channel's other quality.")
+        if (droppedFrames > 200) findings.add("• This device is dropping frames ($droppedFrames). Turn Picture mode to Original, or pick a lower quality.")
+        if (mobile) findings.add("• You're on mobile data or a hotspot: speed changes a lot while moving. Settings → Picture quality and data → save data helps.")
+        if (findings.isEmpty()) findings.add(
+            if (buf >= 5) "• Everything looks healthy now (%.0f s buffered). Short stalls are usually the provider's server.".format(buf)
+            else "• No clear cause yet. Keep it playing for a minute and ask again, or run Network Center → Full check."
+        )
+        val summary = String.format(java.util.Locale.US, "Buffer %.1f s   •   Network %s   •   Stream %s", buf,
+            if (have > 0) "%.1f Mbps".format(have / 1e6) else "–", if (need > 0) "%.1f Mbps".format(need / 1e6) else "–")
+        AlertDialog.Builder(this)
+            .setTitle(Tr.s("🩺  Stream Doctor"))
+            .setMessage(summary + "\n\n" + findings.joinToString("\n\n"))
+            .setPositiveButton("OK", null)
+            .setNeutralButton(Tr.s("Network Center")) { _, _ -> startActivity(Intent(this, NetworkActivity::class.java)) }
+            .show()
     }
 
     private fun toggleStats() {
@@ -624,6 +727,7 @@ class PlayerActivity : AppCompatActivity() {
         Repo.queueIndex = index
         retries = 0
         stallReconnects = 0
+        triedVariants.clear()
         stopNextCountdown()
         skipChip?.visibility = View.GONE
         droppedFrames = 0
@@ -738,8 +842,28 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    /** Live channel failing in this quality: switch to another quality of the same channel. */
+    private val triedVariants = HashSet<String>()
+
+    private fun tryOtherQuality(): Boolean {
+        if (!current.isLive || shiftStartMs > 0 || !Prefs.groupQualities) return false
+        val c = Repo.channel(current.channelId) ?: return false
+        triedVariants.add(c.id)
+        val next = Repo.variantsOf(c).firstOrNull { it.id !in triedVariants } ?: return false
+        triedVariants.add(next.id)
+        errorView.text = Tr.s("This quality isn't working. Trying {}…").replace("{}", Repo.qualityLabel(Repo.qualityRank(next.name)))
+        errorView.visibility = View.VISIBLE
+        val list = items.toMutableList()
+        list[index] = PlayItem(current.key, next.name, Repo.urlFor(next), true, next.id)
+        items = list
+        triedAltExt = false
+        retries = 0
+        load(Repo.urlFor(next), null)
+        return true
+    }
+
     private fun fail(error: PlaybackException) {
-        if (current.isLive && tryOtherFormat()) return
+        if (current.isLive && (tryOtherFormat() || tryOtherQuality())) return
         failed = true
         val item = current
         val r = firstProbe
@@ -1155,6 +1279,10 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private val listener = object : Player.Listener {
+        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+            handler.postDelayed({ matchFrameRate() }, 300)
+        }
+
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK && !aligning && !current.isLive) {
                 seekTargetMs = newPosition.positionMs
@@ -1601,6 +1729,7 @@ class PlayerActivity : AppCompatActivity() {
             })
         }
         options.add((if (statsOn) "Hide stream stats" else "Show stream stats") to { toggleStats() })
+        options.add("🩺  Why is it buffering? (Stream Doctor)" to { streamDoctor() })
         AlertDialog.Builder(this)
             .setTitle(current.title)
             .setItems(options.map { it.first }.toTypedArray()) { _, which -> options[which].second() }

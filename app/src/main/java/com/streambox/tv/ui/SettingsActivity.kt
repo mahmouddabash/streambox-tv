@@ -165,6 +165,27 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         })
+        val qOpts = arrayOf("Best available", "Up to Full HD", "Up to HD", "SD (saves data)")
+        rows.add(Row("Channel qualities", if (!Prefs.groupQualities) "Every quality listed separately" else
+            "Grouped: one entry per channel   •   plays " + qOpts[Prefs.preferredQuality.coerceIn(0, 3)] + "   •   hold OK on a channel to pick") {
+            choose("Channel qualities", arrayOf("List every quality separately") + qOpts.map { "Group, play: $it" }, if (Prefs.groupQualities) Prefs.preferredQuality + 1 else 0) {
+                Prefs.groupQualities = it > 0
+                if (it > 0) Prefs.preferredQuality = it - 1
+                refresh()
+            }
+        })
+        val fpsOpts = arrayOf("Off", "Movies and series", "Always (also live TV)")
+        rows.add(Row("Match frame rate", fpsOpts[Prefs.matchFrameRate.coerceIn(0, 2)] + "   •   " + "smoother motion on TVs that support 24/25/50 Hz (the screen may blink once)") {
+            choose("Match frame rate", fpsOpts, Prefs.matchFrameRate.coerceIn(0, 2)) {
+                Prefs.matchFrameRate = it
+                refresh()
+            }
+        })
+        rows.add(Row("Phone remote", if (com.streambox.tv.data.RemoteServer.running) "On   •   press OK to show the QR code again or switch it off"
+            else "Use your phone as a remote on the home Wi-Fi: scan a QR code, no app needed") { phoneRemote() })
+        rows.add(Row("Network Center", "Speed test, provider and connection checks, DNS, data used, why it buffers") {
+            startActivity(android.content.Intent(this, NetworkActivity::class.java))
+        })
         rows.add(Row("Device type", if (Prefs.isTouchDevice) "Touch screen (car, phone, tablet): back arrows, swipe and tap controls" else "TV with a remote control") {
             choose("Device type", arrayOf("TV with a remote control", "Touch screen (car, phone, tablet)"), if (Prefs.isTouchDevice) 1 else 0) {
                 Prefs.deviceMode = if (it == 1) "touch" else "tv"
@@ -287,6 +308,38 @@ class SettingsActivity : AppCompatActivity() {
             toast("Resume positions cleared")
         })
         adapter.submit(rows)
+    }
+
+    private fun phoneRemote() {
+        val url = com.streambox.tv.data.RemoteServer.start(this)
+        if (url == null) {
+            toast("Connect the TV to Wi-Fi or Ethernet first")
+            return
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+        }
+        box.addView(TextView(this).apply {
+            text = Tr.s("Scan with your phone's camera. The phone must be on the same Wi-Fi as this device.") + "\n\n$url"
+            setTextColor(0xFFF5F7FF.toInt())
+        })
+        box.addView(android.widget.ImageView(this).apply {
+            val size = (240 * resources.displayMetrics.density).toInt()
+            setImageBitmap(Qr.bitmap(url, size))
+            layoutParams = android.widget.LinearLayout.LayoutParams(size, size).apply { topMargin = pad / 2 }
+        })
+        AlertDialog.Builder(this)
+            .setTitle(Tr.s("Phone remote"))
+            .setView(box)
+            .setPositiveButton(Tr.s("Keep on"), null)
+            .setNegativeButton(Tr.s("Switch off")) { _, _ ->
+                com.streambox.tv.data.RemoteServer.stop()
+                refresh()
+            }
+            .setOnDismissListener { refresh() }
+            .show()
     }
 
     private fun showStats() {

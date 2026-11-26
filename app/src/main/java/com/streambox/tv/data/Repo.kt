@@ -652,6 +652,59 @@ object Repo {
             .filter { it.categoryId !in locked }.take(limit)
     }
 
+    // ------------------------------------------------------------------ Channel qualities
+
+    private val qualityTokens = Regex(
+        "(?i)(\\b(4k|uhd|2160p?|fhd|1080[pi]?|hd|720p?|sd|576p?|480p?|hevc|h\\.?26[45]|x26[45]|50fps|60fps|hq|lq|raw|backup|multi)\\b|ᵁᴴᴰ|ᶠᴴᴰ|ᴴᴰ|ˢᴰ|⁴ᴷ|[◉●★✪♛™®]|\\(\\s*\\)|\\[\\s*\\])"
+    )
+
+    /** 4 = 4K, 3 = Full HD, 2 = HD (or unknown), 1 = SD. */
+    fun qualityRank(name: String): Int {
+        val n = name.lowercase()
+        return when {
+            Regex("\\b(4k|uhd|2160p?)\\b").containsMatchIn(n) || "ᵁᴴᴰ" in name || "⁴ᴷ" in name -> 4
+            Regex("\\b(fhd|1080[pi]?)\\b").containsMatchIn(n) || "ᶠᴴᴰ" in name -> 3
+            Regex("\\b(sd|576p?|480p?|lq)\\b").containsMatchIn(n) || "ˢᴰ" in name -> 1
+            else -> 2
+        }
+    }
+
+    fun qualityLabel(rank: Int) = when (rank) { 4 -> "4K"; 3 -> "FHD"; 1 -> "SD"; else -> "HD" }
+
+    /** Same channel in different qualities share this key ("MBC 1 FHD", "MBC 1 HD" → "mbc 1"). */
+    fun qualityGroup(name: String): String =
+        qualityTokens.replace(name.lowercase(), " ").replace(Regex("[|:_\\-]+\\s*$"), " ").replace(Regex("\\s+"), " ").trim()
+
+    /** One channel per group: the hand-picked quality, else the best one allowed by the preference. */
+    fun collapseQualities(list: List<Channel>): List<Channel> {
+        if (!Prefs.groupQualities || list.size < 2) return list
+        val groups = list.groupBy { qualityGroup(it.name) }
+        if (groups.size == list.size) return list
+        val cap = when (Prefs.preferredQuality) { 1 -> 3; 2 -> 2; 3 -> 1; else -> 4 }
+        val chosen = HashMap<String, Channel>()
+        for ((key, vs) in groups) {
+            val pick = vs.firstOrNull { it.id == Prefs.groupChoice(key) }
+                ?: vs.filter { qualityRank(it.name) <= cap }.maxByOrNull { qualityRank(it.name) }
+                ?: vs.minByOrNull { qualityRank(it.name) }!!
+            chosen[key] = pick
+        }
+        val out = ArrayList<Channel>()
+        val seen = HashSet<String>()
+        for (c in list) {
+            val key = qualityGroup(c.name)
+            if (seen.add(key)) out.add(chosen[key] ?: c)
+        }
+        return out
+    }
+
+    /** Every quality of [c] in the catalogue, best first. */
+    fun variantsOf(c: Channel): List<Channel> {
+        val key = qualityGroup(c.name)
+        if (key.isEmpty()) return listOf(c)
+        return channels.filter { it.categoryId == c.categoryId && qualityGroup(it.name) == key }
+            .ifEmpty { listOf(c) }.sortedByDescending { qualityRank(it.name) }
+    }
+
     /** Watched to the end, or only the closing credits are left (the last 5 minutes past 85 %). */
     fun isFinished(pos: Long, dur: Long): Boolean =
         dur > 0 && (pos > dur * 0.95 || (dur >= 20 * 60_000L && pos >= dur * 0.85 && dur - pos <= 5 * 60_000L))

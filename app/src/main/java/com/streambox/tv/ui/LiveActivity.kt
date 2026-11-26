@@ -122,7 +122,10 @@ class LiveActivity : AppCompatActivity() {
                 v.findViewById<TextView>(R.id.num).text = c.num.toString()
                 v.findViewById<TextView>(R.id.name).text = withNow(c)
                 v.findViewById<ImageView>(R.id.logo).loadLogo(c.logo, c.name)
-                val badge = if (c.id in favs) "★" else ""
+                // Grouped qualities, e.g. "4K · FHD · HD".
+                val q = if (Prefs.groupQualities) Repo.variantsOf(c).takeIf { it.size > 1 }
+                    ?.map { Repo.qualityLabel(Repo.qualityRank(it.name)) }?.distinct()?.joinToString(" · ") else null
+                val badge = listOfNotNull(if (c.id in favs) "★" else null, q).joinToString("  ")
                 v.findViewById<TextView>(R.id.badge).text = badge
             },
             onClick = { c, pos -> onChannelClick(c, pos) },
@@ -183,7 +186,7 @@ class LiveActivity : AppCompatActivity() {
         currentCat = id
         Prefs.setLastCategory(Repo.profileId, screenKey, id)
         favs = Prefs.favourites(Repo.userKey, Prefs.FAV_LIVE)
-        catChannels = Repo.channelsIn(id)
+        catChannels = Repo.collapseQualities(Repo.channelsIn(id))
         applyFilter()
     }
 
@@ -267,6 +270,26 @@ class LiveActivity : AppCompatActivity() {
     }
 
     private fun channelMenu(c: Channel, pos: Int) {
+        val isFav = Prefs.isFavourite(Repo.userKey, Prefs.FAV_LIVE, c.id)
+        val variants = Repo.variantsOf(c)
+        if (variants.size > 1 && Prefs.groupQualities) {
+            // Grouped channel: pick the quality first, then the usual menu.
+            val labels = variants.map { (if (it.id == c.id) "✓ " else "    ") + Repo.qualityLabel(Repo.qualityRank(it.name)) + "   •   " + it.name }
+            AlertDialog.Builder(this)
+                .setTitle(Tr.s("Quality") + ": " + Repo.qualityGroup(c.name).uppercase())
+                .setItems((labels + Tr.s("More options…")).toTypedArray()) { _, w ->
+                    if (w < variants.size) {
+                        Prefs.setGroupChoice(Repo.qualityGroup(c.name), variants[w].id)
+                        showCategory(currentCat)
+                    } else channelMenuItems(c, pos)
+                }
+                .show()
+            return
+        }
+        channelMenuItems(c, pos)
+    }
+
+    private fun channelMenuItems(c: Channel, pos: Int) {
         val isFav = Prefs.isFavourite(Repo.userKey, Prefs.FAV_LIVE, c.id)
         val options = arrayOf(
             "Play full screen",

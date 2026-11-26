@@ -62,6 +62,7 @@
         <activity android:name=".ui.SeriesDetailActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.EpgActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.SettingsActivity" android:screenOrientation="landscape" />
+        <activity android:name=".ui.NetworkActivity" android:exported="false" />
         <activity android:name=".ui.DownloadsActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.ViewersActivity" android:screenOrientation="landscape" />
         <activity android:name=".ui.AboutActivity" android:screenOrientation="landscape" />

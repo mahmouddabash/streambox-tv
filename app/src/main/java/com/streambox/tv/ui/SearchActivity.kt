@@ -84,7 +84,19 @@ class SearchActivity : AppCompatActivity() {
         findViewById<Button>(R.id.voice).setOnClickListener { startVoice() }
 
         status.text = "Type, or press the mic and speak"
-        if (intent.getBooleanExtra(EXTRA_VOICE, false)) startVoice() else query.requestFocus()
+        val preset = intent.getStringExtra(EXTRA_QUERY)
+        when {
+            !preset.isNullOrBlank() -> {
+                // From the phone remote: "play …" starts a channel, anything else is searched.
+                if (!playByVoice(preset)) {
+                    query.setText(preset)
+                    query.setSelection(preset.length)
+                    search(preset, immediate = true)
+                }
+            }
+            intent.getBooleanExtra(EXTRA_VOICE, false) -> startVoice()
+            else -> query.requestFocus()
+        }
     }
 
     private fun startVoice() {
@@ -314,5 +326,6 @@ class SearchActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_VOICE = "voice"
+        const val EXTRA_QUERY = "query"
     }
 }

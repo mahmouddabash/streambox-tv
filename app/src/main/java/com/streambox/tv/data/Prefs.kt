@@ -576,6 +576,66 @@ object Prefs {
         get() = sp.getInt("sortMode", 0)
         set(v) = sp.edit().putInt("sortMode", v).apply()
 
+    /** DNS: 0 automatic (the TV's own, private DNS when it fails), 1 Cloudflare private DNS, 2 Google private DNS. */
+    var dnsMode: Int
+        get() = sp.getInt("dnsMode", 0)
+        set(v) = sp.edit().putInt("dnsMode", v).apply()
+
+    private fun monthKey(): String = java.text.SimpleDateFormat("yyyyMM", java.util.Locale.US).format(java.util.Date())
+
+    /** Data used by StreamBox this month, split into Wi-Fi / Ethernet and mobile data / hotspot. */
+    fun addDataUsed(bytes: Long, mobile: Boolean) {
+        if (bytes <= 0) return
+        val k = "data_${monthKey()}_" + if (mobile) "m" else "w"
+        sp.edit().putLong(k, sp.getLong(k, 0L) + bytes).apply()
+    }
+
+    fun dataUsed(mobile: Boolean): Long = sp.getLong("data_${monthKey()}_" + if (mobile) "m" else "w", 0L)
+
+    fun resetDataUsed() {
+        sp.edit().remove("data_${monthKey()}_m").remove("data_${monthKey()}_w").apply()
+    }
+
+    /** Show one entry per channel with its qualities (4K / FHD / HD / SD) grouped. */
+    var groupQualities: Boolean
+        get() = sp.getBoolean("groupQualities", true)
+        set(v) = sp.edit().putBoolean("groupQualities", v).apply()
+
+    /** Preferred quality for grouped channels: 0 best, 1 up to Full HD, 2 up to HD, 3 SD (save data). */
+    var preferredQuality: Int
+        get() = sp.getInt("prefQuality", 0)
+        set(v) = sp.edit().putInt("prefQuality", v).apply()
+
+    /** A quality picked by hand for one channel group (channel id), overriding [preferredQuality]. */
+    fun groupChoice(group: String): String = sp.getString("qg_$group", "") ?: ""
+
+    fun setGroupChoice(group: String, channelId: String) {
+        sp.edit().putString("qg_$group", channelId).apply()
+    }
+
+    /** Kids viewer limits: minutes per day (0 = none) and bedtime hour (−1 = none; ends 06:00). */
+    fun kidsLimit(viewerId: String): Int = sp.getInt("kidLim_$viewerId", 0)
+    fun setKidsLimit(viewerId: String, min: Int) = sp.edit().putInt("kidLim_$viewerId", min).apply()
+    fun kidsBedtime(viewerId: String): Int = sp.getInt("kidBed_$viewerId", -1)
+    fun setKidsBedtime(viewerId: String, hour: Int) = sp.edit().putInt("kidBed_$viewerId", hour).apply()
+
+    private fun dayKey() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+    fun kidsUsedMs(viewerId: String): Long = sp.getLong("kidUse_${viewerId}_${dayKey()}", 0L)
+    fun addKidsUsed(viewerId: String, ms: Long) {
+        val k = "kidUse_${viewerId}_${dayKey()}"
+        sp.edit().putLong(k, sp.getLong(k, 0L) + ms).apply()
+    }
+
+    /** After a parent enters the PIN, watching may continue until this time. */
+    var kidsUnlockedUntil: Long
+        get() = sp.getLong("kidUnlock", 0L)
+        set(v) = sp.edit().putLong("kidUnlock", v).apply()
+
+    /** Match the TV's refresh rate to the video: 0 off, 1 movies and series, 2 always. */
+    var matchFrameRate: Int
+        get() = sp.getInt("matchFps", 1)
+        set(v) = sp.edit().putInt("matchFps", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

@@ -24,6 +24,18 @@ class App : Application(), coil.ImageLoaderFactory {
         keepContentClearOfSystemBars()
         addTouchBackArrow()
         addNightMode()
+        // The phone remote sends its keys to whichever StreamBox screen is showing.
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityResumed(a: android.app.Activity) { com.streambox.tv.data.RemoteServer.foreground = a }
+            override fun onActivityPaused(a: android.app.Activity) {
+                if (com.streambox.tv.data.RemoteServer.foreground === a) com.streambox.tv.data.RemoteServer.foreground = null
+            }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityStarted(a: android.app.Activity) {}
+            override fun onActivityStopped(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
         Prefs.detectedTouch = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN) &&
             !packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
     }
