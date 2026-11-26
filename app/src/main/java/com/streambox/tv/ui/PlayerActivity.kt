@@ -11,6 +11,7 @@ import android.util.Rational
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ProgressBar
@@ -125,6 +126,226 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private val current: PlayItem get() = items[index]
+
+    // ---------------------------------------------------------------- Next episode countdown
+    private var nextCount = 0
+    private val nextPending get() = nextCount > 0
+    private val nextTick = object : Runnable {
+        override fun run() {
+            if (nextCount <= 0) return
+            nextCount--
+            if (nextCount == 0) {
+                playNextNow()
+                return
+            }
+            val next = items.getOrNull(index + 1)?.title ?: ""
+            shiftView.text = "▶  " + Tr.s("Next episode in {} s").replace("{}", "$nextCount") + "\n" + next + "\n" +
+                Tr.s("OK = play now   •   Back = close")
+            shiftView.visibility = View.VISIBLE
+            handler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun startNextCountdown() {
+        handler.removeCallbacks(hideSeek)
+        playerView.hideController()
+        nextCount = 11
+        handler.post(nextTick)
+    }
+
+    private fun stopNextCountdown() {
+        nextCount = 0
+        handler.removeCallbacks(nextTick)
+        shiftView.visibility = View.GONE
+    }
+
+    private fun playNextNow() {
+        stopNextCountdown()
+        if (index < items.size - 1) {
+            index++
+            startItem(resume = false)
+        }
+    }
+
+    // ---------------------------------------------------------------- Skip intro
+    private var skipChip: android.widget.Button? = null
+    private var introSkippedFor = ""
+
+    private fun seriesOfCurrent(): String = if (current.key.startsWith("ep_")) Prefs.episodeSeries(current.key) else ""
+
+    private val introTick = object : Runnable {
+        override fun run() {
+            val p = player
+            val sid = if (items.isNotEmpty() && !current.isLive) seriesOfCurrent() else ""
+            val end = if (sid.isNotEmpty()) Prefs.introEnd(sid) else 0L
+            val pos = p?.currentPosition ?: 0L
+            val show = p != null && end > 0 && pos in 1_000L until end - 1_500L && !nextPending
+            if (show && Prefs.autoSkipIntro && introSkippedFor != current.key) {
+                introSkippedFor = current.key
+                p!!.seekTo(end)
+                toast("Intro skipped")
+            } else {
+                showSkipChip(show && !Prefs.autoSkipIntro)
+            }
+            handler.postDelayed(this, 700)
+        }
+    }
+
+    private fun showSkipChip(on: Boolean) {
+        if (!on) {
+            skipChip?.visibility = View.GONE
+            return
+        }
+        val chip = skipChip ?: android.widget.Button(this, null, 0, R.style.Btn).also { b ->
+            b.text = Tr.s("⏭  Skip intro")
+            b.setOnClickListener { skipIntro() }
+            val d = resources.displayMetrics.density
+            (playerView.parent as android.widget.FrameLayout).addView(b, android.widget.FrameLayout.LayoutParams(-2, -2,
+                android.view.Gravity.BOTTOM or android.view.Gravity.END).apply { setMargins(0, 0, (40 * d).toInt(), (110 * d).toInt()) })
+            skipChip = b
+        }
+        chip.visibility = View.VISIBLE
+    }
+
+    private fun skipIntro() {
+        val end = Prefs.introEnd(seriesOfCurrent())
+        if (end > 0) player?.seekTo(end)
+        showSkipChip(false)
+    }
+
+    private fun markIntro() {
+        val sid = seriesOfCurrent()
+        val pos = player?.currentPosition ?: return
+        if (sid.isEmpty() || pos < 5_000L) {
+            toast("Play to where the opening titles end, then choose this again")
+            return
+        }
+        Prefs.setIntroEnd(sid, pos)
+        toast(Tr.s("Intro marked: {} will be skippable in every episode").replace("{}", Ui.duration(pos)))
+    }
+
+    // ---------------------------------------------------------------- Touch gestures (cars, phones, tablets)
+    // Double-tap left / right = back / forward 10 s (live: replay 30 s), swipe up/down on the right
+    // = volume, on the left = brightness, swipe in from the left edge = channel list.
+    private enum class Swipe { NONE, VOLUME, BRIGHTNESS, CHANNELS, OTHER }
+    private var swipe = Swipe.NONE
+    private var swipeAcc = 0f
+
+    private val gestures by lazy {
+        android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val w = window.decorView.width.toFloat()
+                val p = player ?: return false
+                return when {
+                    e.x < w / 3 -> {
+                        if (current.isLive) replay30() else {
+                            p.seekTo((p.currentPosition - 10_000L).coerceAtLeast(0))
+                            flash("⏪  10 s")
+                        }
+                        true
+                    }
+                    e.x > w * 2 / 3 && !current.isLive -> {
+                        p.seekTo(p.currentPosition + 10_000L)
+                        flash("⏩  10 s")
+                        true
+                    }
+                    else -> false
+                }
+            }
+
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
+                if (e1 == null) return false
+                val w = window.decorView.width.toFloat()
+                val h = window.decorView.height.toFloat()
+                if (swipe == Swipe.NONE) {
+                    val mx = e2.x - e1.x
+                    val my = e2.y - e1.y
+                    if (kotlin.math.abs(mx) < 24 && kotlin.math.abs(my) < 24) return false
+                    swipe = when {
+                        e1.x < w * 0.08f && mx > kotlin.math.abs(my) && items.size > 1 && current.isLive -> Swipe.CHANNELS
+                        kotlin.math.abs(my) > kotlin.math.abs(mx) -> if (e1.x > w / 2) Swipe.VOLUME else Swipe.BRIGHTNESS
+                        else -> Swipe.OTHER
+                    }
+                    swipeAcc = 0f
+                }
+                when (swipe) {
+                    Swipe.VOLUME -> {
+                        swipeAcc += dy
+                        val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+                        val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                        val step = h / (max * 1.5f)
+                        while (kotlin.math.abs(swipeAcc) >= step) {
+                            am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC,
+                                if (swipeAcc > 0) android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER, 0)
+                            swipeAcc -= if (swipeAcc > 0) step else -step
+                        }
+                        val v = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                        flash("🔊  ${v * 100 / max.coerceAtLeast(1)} %")
+                    }
+                    Swipe.BRIGHTNESS -> {
+                        val lp = window.attributes
+                        val cur = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
+                        lp.screenBrightness = (cur + dy / h).coerceIn(0.02f, 1f)
+                        window.attributes = lp
+                        flash("☀  ${(lp.screenBrightness * 100).toInt()} %")
+                    }
+                    else -> {}
+                }
+                return swipe != Swipe.OTHER
+            }
+        })
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (nextPending && ev.actionMasked == MotionEvent.ACTION_UP) {
+            playNextNow()
+            return true
+        }
+        if (nextPending) return true
+        // The skip-intro button and the channel list handle their own taps.
+        if (skipChip?.visibility == View.VISIBLE || panelVisible) {
+            if (swipe == Swipe.NONE) return super.dispatchTouchEvent(ev)
+        }
+        gestures.onTouchEvent(ev)
+        val end = ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL
+        val wasSwiping = swipe != Swipe.NONE && swipe != Swipe.OTHER
+        if (end) {
+            if (swipe == Swipe.CHANNELS) showChannelPanel()
+            swipe = Swipe.NONE
+        }
+        if (wasSwiping) {
+            // A swipe isn't a tap: don't let the controls react to it.
+            val c = MotionEvent.obtain(ev)
+            c.action = MotionEvent.ACTION_CANCEL
+            super.dispatchTouchEvent(c)
+            c.recycle()
+            return true
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /** Short message in the middle of the picture. */
+    private fun flash(text: String) {
+        shiftView.text = text
+        shiftView.visibility = View.VISIBLE
+        handler.removeCallbacks(hideSeek)
+        handler.postDelayed(hideSeek, 900)
+    }
+
+    // ---------------------------------------------------------------- Live: replay 30 s
+    private fun replay30() {
+        val p = player ?: return
+        when {
+            shiftStartMs > 0 -> p.seekTo((p.currentPosition - 30_000L).coerceAtLeast(0))
+            p.isCurrentMediaItemSeekable && p.isCurrentMediaItemLive -> p.seekTo((p.currentPosition - 30_000L).coerceAtLeast(0))
+            Repo.canTimeshift(liveChannel) -> startShift(System.currentTimeMillis() - 30_000L)
+            else -> {
+                toast("This channel can't go back")
+                return
+            }
+        }
+        flash("⟲  30 s   •   " + Tr.s("Back to live in the menu"))
+    }
 
     // ---------------------------------------------------------------- Freeze watchdog
     // Some IPTV servers stop sending data without closing the connection: the picture freezes or
@@ -340,6 +561,8 @@ class PlayerActivity : AppCompatActivity() {
         }
         handler.removeCallbacks(watchdog)
         handler.postDelayed(watchdog, 3000)
+        handler.removeCallbacks(introTick)
+        handler.postDelayed(introTick, 1000)
         if (statsOn) {
             handler.removeCallbacks(statsTicker)
             handler.post(statsTicker)
@@ -392,6 +615,8 @@ class PlayerActivity : AppCompatActivity() {
         Repo.queueIndex = index
         retries = 0
         stallReconnects = 0
+        stopNextCountdown()
+        skipChip?.visibility = View.GONE
         droppedFrames = 0
         token++
         recoverySteps = 0
@@ -486,6 +711,24 @@ class PlayerActivity : AppCompatActivity() {
         return true
     }
 
+    /** What the problem most likely is, in everyday words, and what to try. */
+    private fun plainAdvice(error: PlaybackException, r: StreamProbe.Result?): String {
+        val http = r?.httpCode ?: 0
+        return when {
+            http == 401 || http == 403 || http == 456 || http == 458 || http in 509..513 ->
+                "Your provider refused. Your subscription may have expired, or another device is using your only connection: stop it and try again."
+            http == 404 || http == 410 -> "This channel or video is offline at your provider right now. Try again later or pick another one."
+            http >= 500 -> "Your provider's server has a problem. Try again in a few minutes."
+            r?.kind == StreamProbe.Kind.EMPTY -> "Usually the channel is offline, or your connection limit is reached."
+            error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                "No connection to the server. Check the internet (Wi-Fi or hotspot) and try again."
+            error.errorCode in 4000..4999 -> "This device can't decode this video. Try another quality, or open it in VLC."
+            error.errorCode in 3000..3999 -> "The stream format isn't supported. Try Settings → Stream format, or open it in VLC."
+            else -> "Try again, or choose another channel."
+        }
+    }
+
     private fun fail(error: PlaybackException) {
         if (current.isLive && tryOtherFormat()) return
         failed = true
@@ -502,7 +745,7 @@ class PlayerActivity : AppCompatActivity() {
                 "This video is ${r.kind.label}, which the built-in player does not support."
             else -> "Format: ${r.kind.label}. The built-in player could not read it (${error.errorCodeName})."
         }
-        errorView.text = "Cannot play this stream.\n$reason\n\nOK = open in VLC / MX Player     " +
+        errorView.text = "Cannot play this stream.\n$reason\n" + Tr.s(plainAdvice(error, r)) + "\n\nOK = open in VLC / MX Player     " +
             if (item.isLive) "▲▼ = other channel     Back = return" else "Back = return"
         errorView.visibility = View.VISIBLE
         playerView.hideController()
@@ -930,12 +1173,7 @@ class PlayerActivity : AppCompatActivity() {
                     handler.postDelayed(retry, 1500)
                 } else {
                     Prefs.setPosition(item.key, 0L)
-                    if (index < items.size - 1) {
-                        index++
-                        startItem(resume = false)
-                    } else {
-                        finish()
-                    }
+                    if (index < items.size - 1) startNextCountdown() else finish()
                 }
             }
         }
@@ -1072,6 +1310,27 @@ class PlayerActivity : AppCompatActivity() {
     // ------------------------------------------------------------------ Keys
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (nextPending) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+                KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> playNextNow()
+                KeyEvent.KEYCODE_BACK -> {
+                    stopNextCountdown()
+                    finish()
+                }
+            }
+            return true
+        }
+        if (skipChip?.visibility == View.VISIBLE && !playerView.isControllerFullyVisible &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)
+        ) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) skipIntro()
+            return true
+        }
+        if (items.isNotEmpty() && current.isLive && event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) replay30()
+            return true
+        }
         if (items.isEmpty() || player == null) return super.dispatchKeyEvent(event)
         val live = current.isLive
         val down = event.action == KeyEvent.ACTION_DOWN
@@ -1297,6 +1556,10 @@ class PlayerActivity : AppCompatActivity() {
         if (current.isLive) {
             val canShift = Repo.canTimeshift(liveChannel)
             if (shiftStartMs > 0) options.add("⏩  Back to live" to { goLive() })
+            else if (player?.isCurrentMediaItemSeekable == true && player?.isCurrentMediaItemLive == true &&
+                (player?.currentLiveOffset ?: 0L) > 10_000L
+            ) options.add("⏩  Back to live" to { player?.seekToDefaultPosition() })
+            options.add("⟲  Replay the last 30 seconds" to { replay30() })
             options.add((if (pausedAtMs > 0) "▶  Resume" else "⏸  Pause live TV") to { togglePause() })
             if (canShift) {
                 options.add("⏪  Rewind 5 minutes" to { rewind(5) })
@@ -1320,6 +1583,14 @@ class PlayerActivity : AppCompatActivity() {
             cycleFit()
         })
         if (!current.isLive) options.add("Playback speed: ${p.playbackParameters.speed}x" to { speedMenu() })
+        if (seriesOfCurrent().isNotEmpty()) {
+            options.add("⏭  Intro ends here (skip it in every episode)" to { markIntro() })
+            if (Prefs.introEnd(seriesOfCurrent()) > 0) options.add("✕  Clear skip intro for this series" to {
+                Prefs.setIntroEnd(seriesOfCurrent(), 0L)
+                showSkipChip(false)
+                toast("Skip intro cleared")
+            })
+        }
         options.add((if (statsOn) "Hide stream stats" else "Show stream stats") to { toggleStats() })
         AlertDialog.Builder(this)
             .setTitle(current.title)

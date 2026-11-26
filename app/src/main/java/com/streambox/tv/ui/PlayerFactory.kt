@@ -66,6 +66,17 @@ class StereoAwareRenderers(context: Context) : DefaultRenderersFactory(context) 
 
 @OptIn(markerClass = [UnstableApi::class])
 object PlayerFactory {
+    /** True when the data saver applies right now (Settings → Picture quality on mobile data). */
+    fun saveData(context: Context): Boolean = when (Prefs.dataSaver) {
+        1 -> false
+        2 -> true
+        else -> try {
+            (context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered
+        } catch (_: Exception) {
+            false
+        }
+    }
+
 
     /**
      * [audioFocus]: the main player asks Android for audio focus. Car systems mute apps that play
@@ -93,7 +104,12 @@ object PlayerFactory {
                 .setViewportSizeToPhysicalDisplaySize(context, false)
                 .setExceedVideoConstraintsIfNecessary(true)
                 .setExceedRendererCapabilitiesIfNecessary(true)
-                .setForceHighestSupportedBitrate(Prefs.maxQuality)
+                .setForceHighestSupportedBitrate(Prefs.maxQuality && !saveData(context))
+                .apply {
+                    // Data saver: on mobile data / a phone hotspot (or always), stay at 720p and ~2.5 Mbps
+                    // when the provider offers several qualities.
+                    if (saveData(context)) setMaxVideoSize(1280, 720).setMaxVideoBitrate(2_500_000)
+                }
                 .apply {
                     // Automatic languages: the preferred audio track, and subtitles only when asked for.
                     if (Prefs.audioLanguage.isNotEmpty()) setPreferredAudioLanguages(Prefs.audioLanguage, "en")

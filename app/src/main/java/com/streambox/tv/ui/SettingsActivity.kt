@@ -165,6 +165,17 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         })
+        rows.add(Row("Skip intro", if (Prefs.autoSkipIntro) "Automatic: marked intros are skipped by themselves" else "Button: a Skip intro button appears (mark an intro from the player menu)") {
+            Prefs.autoSkipIntro = !Prefs.autoSkipIntro
+            refresh()
+        })
+        val dataOpts = arrayOf("Save data on mobile data / hotspot (recommended)", "Always best quality", "Always save data")
+        rows.add(Row("Picture quality and data", dataOpts[Prefs.dataSaver.coerceIn(0, 2)] + "   •   applies when the provider offers several qualities") {
+            choose("Picture quality and data", dataOpts, Prefs.dataSaver.coerceIn(0, 2)) {
+                Prefs.dataSaver = it
+                refresh()
+            }
+        })
         rows.add(Row("Start with the last channel", if (Prefs.startLastChannel) "On: StreamBox opens straight into the channel you watched last" else "Off: StreamBox opens on the home screen") {
             Prefs.startLastChannel = !Prefs.startLastChannel
             refresh()

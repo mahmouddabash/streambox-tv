@@ -509,6 +509,23 @@ object Prefs {
         sp.edit().apply { if (ext.isEmpty() || ext == streamFormat) remove("chfmt_$channelId") else putString("chfmt_$channelId", ext) }.apply()
     }
 
+    /** Where a series' opening titles end (ms), set from the player; 0 = not set. */
+    fun introEnd(seriesId: String): Long = sp.getLong("intro_$seriesId", 0L)
+
+    fun setIntroEnd(seriesId: String, ms: Long) {
+        sp.edit().apply { if (ms <= 0) remove("intro_$seriesId") else putLong("intro_$seriesId", ms) }.apply()
+    }
+
+    /** Skip a series' intro by itself once it has been marked (instead of showing the button). */
+    var autoSkipIntro: Boolean
+        get() = sp.getBoolean("autoSkipIntro", false)
+        set(v) = sp.edit().putBoolean("autoSkipIntro", v).apply()
+
+    /** Picture quality vs data: 0 = save data on mobile / hotspot, 1 = always best, 2 = always save data. */
+    var dataSaver: Int
+        get() = sp.getInt("dataSaver", 0)
+        set(v) = sp.edit().putInt("dataSaver", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()
