@@ -204,6 +204,14 @@ class SettingsActivity : AppCompatActivity() {
         rows.add(Row("Hidden titles", if (hiddenCount == 0) "None: use 🚫 Hide on a film or series page" else "$hiddenCount hidden   •   choose to show them again") {
             manageHidden()
         })
+        if (android.os.Build.VERSION.SDK_INT >= 28) rows.add(Row("Even volume", if (Prefs.evenVolume) "On: loud channels and quiet films end up at a similar level" else "Off") {
+            Prefs.evenVolume = !Prefs.evenVolume
+            refresh()
+        })
+        rows.add(Row("Pause live TV on any channel", if (Prefs.localPause) "On: pausing a channel without the provider's archive saves it on this device (up to 3 hours)" else "Off") {
+            Prefs.localPause = !Prefs.localPause
+            refresh()
+        })
         rows.add(Row("Skip intro", if (Prefs.autoSkipIntro) "Automatic: marked intros are skipped by themselves" else "Button: a Skip intro button appears (mark an intro from the player menu)") {
             Prefs.autoSkipIntro = !Prefs.autoSkipIntro
             refresh()

@@ -168,7 +168,10 @@ object PlayerFactory {
 
     /** Applies the subtitle size, colour and background chosen in Settings. */
     fun styleSubtitles(view: androidx.media3.ui.PlayerView) {
-        val sv = view.subtitleView ?: return
+        styleSubtitleView(view.subtitleView ?: return)
+    }
+
+    fun styleSubtitleView(sv: androidx.media3.ui.SubtitleView) {
         val fg = when (Prefs.subtitleColor) { 1 -> 0xFFFFE14D.toInt(); 2 -> 0xFF7FE7FF.toInt(); else -> 0xFFFFFFFF.toInt() }
         val (bg, edge) = when (Prefs.subtitleBackground) {
             1 -> 0xB3000000.toInt() to androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE

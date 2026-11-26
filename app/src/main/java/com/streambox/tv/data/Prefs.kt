@@ -657,6 +657,16 @@ object Prefs {
         get() = sp.getInt("matchFps", 1)
         set(v) = sp.edit().putInt("matchFps", v).apply()
 
+    /** Keep loud and quiet channels/films at a similar volume (Android 9+). */
+    var evenVolume: Boolean
+        get() = sp.getBoolean("evenVolume", false)
+        set(v) = sp.edit().putBoolean("evenVolume", v).apply()
+
+    /** Pause live TV on channels without the provider's archive by saving it on the device. */
+    var localPause: Boolean
+        get() = sp.getBoolean("localPause", true)
+        set(v) = sp.edit().putBoolean("localPause", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

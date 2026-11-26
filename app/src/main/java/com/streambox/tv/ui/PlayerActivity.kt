@@ -332,6 +332,184 @@ class PlayerActivity : AppCompatActivity() {
         handler.postDelayed(hideSeek, 900)
     }
 
+    // ---------------------------------------------------------------- Even volume
+    private var dynamics: Any? = null
+
+    private fun releaseEvenVolume() {
+        if (Build.VERSION.SDK_INT >= 28) try { (dynamics as? android.media.audiofx.DynamicsProcessing)?.release() } catch (_: Exception) {}
+        dynamics = null
+    }
+
+    /** A gentle compressor + limiter on the player's sound, so loud and quiet sources end up alike. */
+    private fun applyEvenVolume(sessionId: Int) {
+        releaseEvenVolume()
+        if (!Prefs.evenVolume || Build.VERSION.SDK_INT < 28 || sessionId == C.AUDIO_SESSION_ID_UNSET || sessionId == 0) return
+        try {
+            val cfg = android.media.audiofx.DynamicsProcessing.Config.Builder(
+                android.media.audiofx.DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION, 8, false, 0, true, 1, false, 0, true
+            ).build()
+            cfg.setMbcBandAllChannelsTo(0, android.media.audiofx.DynamicsProcessing.MbcBand(true, 20_000f, 5f, 120f, 3.5f, -30f, 8f, -90f, 1f, 0f, 9f))
+            cfg.setLimiterAllChannelsTo(android.media.audiofx.DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 10f, -1.5f, 0f))
+            val fx = android.media.audiofx.DynamicsProcessing(0, sessionId, cfg)
+            fx.setEnabled(true)
+            dynamics = fx
+        } catch (_: Exception) {
+            dynamics = null
+        }
+    }
+
+    // ---------------------------------------------------------------- Subtitle timing
+    private var subDelayMs = 0L
+    private var delayedSubs: androidx.media3.ui.SubtitleView? = null
+    private var subBaseFile: java.io.File? = null
+    private var subBaseConfig: androidx.media3.common.MediaItem.SubtitleConfiguration? = null
+
+    private fun subtitleTiming() {
+        val steps = longArrayOf(-3000, -2000, -1000, -500, 0, 500, 1000, 2000, 3000, 5000)
+        val labels = steps.map { (if (it > 0) "+" else if (it < 0) "−" else "±") + String.format(java.util.Locale.US, "%.1f s", kotlin.math.abs(it) / 1000.0) +
+            when { it < 0 -> "  (" + Tr.s("earlier") + ")"; it > 0 -> "  (" + Tr.s("later") + ")"; else -> "" } }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(Tr.s("Subtitle timing"))
+            .setSingleChoiceItems(labels, steps.indexOfFirst { it == subDelayMs }.coerceAtLeast(4)) { d, w ->
+                d.dismiss()
+                setSubDelay(steps[w])
+            }
+            .show()
+    }
+
+    private fun setSubDelay(ms: Long) {
+        val base = subBaseFile
+        if (base != null && subBaseConfig != null) {
+            // Subtitles from a file: rewrite their times, both directions.
+            subDelayMs = ms
+            val f = if (ms == 0L) base else shiftSrt(base, ms)
+            extraSubs = listOf(subBaseConfig!!.buildUpon().setUri(Uri.fromFile(f)).build())
+            startPos = player?.currentPosition ?: 0L
+            load(attemptUrl, attemptMime)
+            flash("💬  " + Tr.s("Subtitle timing") + ": " + (if (ms > 0) "+" else if (ms < 0) "−" else "±") +
+                String.format(java.util.Locale.US, "%.1f s", kotlin.math.abs(ms) / 1000.0))
+            return
+        }
+        if (ms < 0) {
+            toast("These subtitles can only be moved later. For earlier, use Find subtitles online")
+            return
+        }
+        subDelayMs = ms
+        val orig = playerView.subtitleView
+        if (ms == 0L) {
+            orig?.visibility = View.VISIBLE
+            delayedSubs?.visibility = View.GONE
+        } else {
+            val sv = delayedSubs ?: androidx.media3.ui.SubtitleView(this).also { v ->
+                PlayerFactory.styleSubtitleView(v)
+                val parent = playerView.parent as android.widget.FrameLayout
+                parent.addView(v, parent.indexOfChild(playerView) + 1, android.widget.FrameLayout.LayoutParams(-1, -1))
+                delayedSubs = v
+            }
+            sv.setCues(emptyList())
+            sv.visibility = View.VISIBLE
+            orig?.visibility = View.INVISIBLE
+        }
+        flash("💬  " + Tr.s("Subtitle timing") + ": +" + String.format(java.util.Locale.US, "%.1f s", ms / 1000.0))
+    }
+
+    /** Copy of an .srt file with every time moved by [ms]. */
+    private fun shiftSrt(src: java.io.File, ms: Long): java.io.File {
+        val out = java.io.File(src.parentFile, src.nameWithoutExtension + "_sync.srt")
+        val re = Regex("(\\d{1,2}):(\\d{2}):(\\d{2})[,.](\\d{3})")
+        val text = src.readText().replace(re) { m ->
+            val (h, mi, s, f) = m.destructured
+            val t = (((h.toLong() * 60 + mi.toLong()) * 60 + s.toLong()) * 1000 + f.toLong() + ms).coerceAtLeast(0)
+            String.format(java.util.Locale.US, "%02d:%02d:%02d,%03d", t / 3_600_000, t / 60_000 % 60, t / 1000 % 60, t % 1000)
+        }
+        out.writeText(text)
+        return out
+    }
+
+    // ---------------------------------------------------------------- Seek previews (downloaded videos)
+    private var previewSource: String? = null
+    private var previewRetriever: android.media.MediaMetadataRetriever? = null
+    private var previewView: android.widget.ImageView? = null
+    private var previewJob: kotlinx.coroutines.Job? = null
+    private val previewCache = android.util.LruCache<Long, android.graphics.Bitmap>(40)
+
+    /** The file behind the current video when it is on this device, else null. */
+    private fun localVideoPath(): String? {
+        val u = Uri.parse(current.url)
+        if (u.scheme != "file") return null
+        val p = u.path ?: return null
+        return if (p.endsWith(".m3u8")) p.removeSuffix(".m3u8") else p
+    }
+
+    private fun showPreview(posMs: Long) {
+        val path = localVideoPath() ?: return
+        val iv = previewView ?: android.widget.ImageView(this).also { v ->
+            val d = resources.displayMetrics.density
+            v.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            v.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 12 * d; setColor(0xFF000000.toInt()); setStroke((2 * d).toInt(), 0xCCFFFFFF.toInt()) }
+            v.clipToOutline = true
+            v.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            (playerView.parent as android.widget.FrameLayout).addView(v, android.widget.FrameLayout.LayoutParams((256 * d).toInt(), (144 * d).toInt(),
+                android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL).apply { bottomMargin = (130 * d).toInt() })
+            previewView = v
+        }
+        iv.visibility = View.VISIBLE
+        val bucket = posMs / 10_000
+        previewCache.get(bucket)?.let { iv.setImageBitmap(it); return }
+        previewJob?.cancel()
+        previewJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(120)
+            val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    if (previewSource != path) {
+                        previewRetriever?.release()
+                        previewRetriever = android.media.MediaMetadataRetriever().apply { setDataSource(path) }
+                        previewSource = path
+                    }
+                    val r = previewRetriever ?: return@withContext null
+                    val full = r.getFrameAtTime(bucket * 10_000_000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return@withContext null
+                    android.graphics.Bitmap.createScaledBitmap(full, 320, 180, true).also { if (it !== full) full.recycle() }
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            if (bmp != null) {
+                previewCache.put(bucket, bmp)
+                iv.setImageBitmap(bmp)
+            }
+        }
+    }
+
+    private fun hidePreview() {
+        previewJob?.cancel()
+        previewView?.visibility = View.GONE
+    }
+
+    // ---------------------------------------------------------------- Quick settings
+    /** The everyday switches in one short list (MENU key or the ⚙ button); "More…" opens everything. */
+    private fun quickSettings() {
+        val p = player ?: return
+        val opts = ArrayList<Pair<String, () -> Unit>>()
+        opts.add("🔊  " + Tr.s("Audio track") to { trackMenu(C.TRACK_TYPE_AUDIO, "Audio track") })
+        opts.add("💬  " + Tr.s("Subtitles") to { trackMenu(C.TRACK_TYPE_TEXT, "Subtitles") })
+        opts.add("⏱  " + Tr.s("Subtitle timing") + ": " + (if (subDelayMs > 0) "+" else if (subDelayMs < 0) "−" else "±") +
+            String.format(java.util.Locale.US, "%.1f s", kotlin.math.abs(subDelayMs) / 1000.0) to { subtitleTiming() })
+        opts.add("⛶  " + Tr.s("Video fit") + ": " + Tr.s(resizeNames[resizeIdx]) to { cycleFit() })
+        opts.add("🎚  " + Tr.s("Quality") + ": " + qualityLabel(p) to { qualityMenu() })
+        if (Build.VERSION.SDK_INT >= 28) opts.add("🔉  " + Tr.s("Even volume") + ": " + Tr.s(if (Prefs.evenVolume) "On" else "Off") to {
+            Prefs.evenVolume = !Prefs.evenVolume
+            applyEvenVolume(p.audioSessionId)
+            flash("🔉  " + Tr.s("Even volume") + ": " + Tr.s(if (Prefs.evenVolume) "On" else "Off"))
+        })
+        if (!current.isLive) opts.add("⏩  " + Tr.s("Speed") + ": ${p.playbackParameters.speed}x" to { speedMenu() })
+        opts.add("☾  " + Tr.s("Sleep timer") + ": ${sleepLabel()}" to { sleepMenu() })
+        opts.add("☰  " + Tr.s("More options…") to { optionsMenu() })
+        AlertDialog.Builder(this)
+            .setTitle(Tr.s("Quick settings"))
+            .setItems(opts.map { it.first }.toTypedArray()) { _, w -> opts[w].second() }
+            .show()
+    }
+
     // ---------------------------------------------------------------- Live: replay 30 s
     private fun replay30() {
         val p = player ?: return
@@ -621,8 +799,14 @@ class PlayerActivity : AppCompatActivity() {
             onClick = { item, pos -> playFromPanel(item, pos) }
         )
         chPanelList.adapter = chPanelAdapter
-        playerView.findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
-            ?.setKeyTimeIncrement(PlayerFactory.SEEK_STEP_MS)
+        playerView.findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.apply {
+            setKeyTimeIncrement(PlayerFactory.SEEK_STEP_MS)
+            addListener(object : androidx.media3.ui.TimeBar.OnScrubListener {
+                override fun onScrubStart(timeBar: androidx.media3.ui.TimeBar, position: Long) = showPreview(position)
+                override fun onScrubMove(timeBar: androidx.media3.ui.TimeBar, position: Long) = showPreview(position)
+                override fun onScrubStop(timeBar: androidx.media3.ui.TimeBar, position: Long, canceled: Boolean) = hidePreview()
+            })
+        }
         shiftView = findViewById(R.id.shift)
 
         // Only one player at a time (a picture-in-picture window is replaced by the new one).
@@ -643,6 +827,9 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         if (active?.get() === this) active = null
+        stopLocalShift()
+        releaseEvenVolume()
+        try { previewRetriever?.release() } catch (_: Exception) {}
         super.onDestroy()
     }
 
@@ -722,12 +909,20 @@ class PlayerActivity : AppCompatActivity() {
         shiftStartMs = 0L
         pausedAtMs = 0L
         extraSubs = emptyList()
+        subBaseFile = null
+        subBaseConfig = null
         handler.removeCallbacks(shiftTicker)
         shiftView.visibility = View.GONE
         Repo.queueIndex = index
         retries = 0
         stallReconnects = 0
         triedVariants.clear()
+        stopLocalShift()
+        subDelayMs = 0L
+        playerView.subtitleView?.visibility = View.VISIBLE
+        delayedSubs?.visibility = View.GONE
+        previewCache.evictAll()
+        previewSource = null
         stopNextCountdown()
         skipChip?.visibility = View.GONE
         droppedFrames = 0
@@ -756,7 +951,18 @@ class PlayerActivity : AppCompatActivity() {
         attemptUrl = url
         attemptMime = mimeType
         val item = PlayerFactory.mediaItem(url, mimeType)
-        p.setMediaItem(if (extraSubs.isEmpty()) item else item.buildUpon().setSubtitleConfigurations(extraSubs).build())
+        val full = if (extraSubs.isEmpty()) item else item.buildUpon().setSubtitleConfigurations(extraSubs).build()
+        val path = Uri.parse(url).takeIf { it.scheme == "file" }?.path
+        if (path != null && isGrowing(path)) {
+            // Still being written (recording in progress / live TV paused on the device): wait for more data at the end.
+            p.setMediaSource(
+                androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(
+                    androidx.media3.datasource.DataSource.Factory { GrowingFileDataSource { pth -> isGrowing(pth) } }
+                ).createMediaSource(full)
+            )
+        } else {
+            p.setMediaItem(full)
+        }
         if (startPos > 0) p.seekTo(startPos)
         p.prepare()
         p.playWhenReady = true
@@ -1047,8 +1253,41 @@ class PlayerActivity : AppCompatActivity() {
         return if (shiftStartMs > 0) shiftStartMs + p.currentPosition else System.currentTimeMillis()
     }
 
+    // ---------------------------------------------------------------- Pause live on any channel
+    private var localPlaying = false
+
+    private fun isGrowing(path: String): Boolean =
+        (com.streambox.tv.data.LocalShift.receiving && com.streambox.tv.data.LocalShift.file?.absolutePath == path) ||
+            com.streambox.tv.data.Recorder.all().any { it.status == com.streambox.tv.data.Recorder.RECORDING && it.file == path }
+
+    private fun canLocalPause(): Boolean {
+        val p = player ?: return false
+        return current.isLive && shiftStartMs == 0L && !localPlaying && Prefs.localPause &&
+            !Repo.canTimeshift(liveChannel) && !(p.isCurrentMediaItemSeekable && p.isCurrentMediaItemLive) &&
+            !attemptUrl.substringBefore('?').endsWith(".m3u8", true)
+    }
+
+    private fun stopLocalShift() {
+        if (com.streambox.tv.data.LocalShift.active) com.streambox.tv.data.LocalShift.stop()
+        localPlaying = false
+    }
+
     private fun togglePause() {
         val p = player ?: return
+        if (localPlaying) {
+            // Already watching from the device: pause / play the saved copy (it keeps filling).
+            if (p.isPlaying) p.pause() else p.play()
+            return
+        }
+        if ((p.isPlaying || p.playWhenReady) && canLocalPause()) {
+            pausedAtMs = System.currentTimeMillis()
+            playerView.setKeepContentOnPlayerReset(true)
+            p.stop() // frees the provider connection for the copy on the device
+            com.streambox.tv.data.LocalShift.start(this, attemptUrl)
+            flash("⏸  " + Tr.s("Paused   •   saving the channel on this device"))
+            updateShiftBadge()
+            return
+        }
         if (p.isPlaying || p.playWhenReady) {
             pausedAtMs = livePosition()
             p.pause()
@@ -1060,6 +1299,16 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun resumeLive() {
         val p = player ?: return
+        val f = com.streambox.tv.data.LocalShift.file
+        if (f != null && !localPlaying && pausedAtMs > 0) {
+            pausedAtMs = 0L
+            localPlaying = true
+            startPos = 0L
+            load(Uri.fromFile(f).toString(), null)
+            toast("Playing from where you paused   •   Menu → Back to live")
+            updateShiftBadge()
+            return
+        }
         val paused = pausedAtMs
         pausedAtMs = 0L
         val behind = System.currentTimeMillis() - paused
@@ -1126,6 +1375,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun goLive() {
+        stopLocalShift()
         shiftStartMs = 0L
         pausedAtMs = 0L
         startPos = 0L
@@ -1279,6 +1529,17 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private val listener = object : Player.Listener {
+        override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+            if (subDelayMs > 0 && subBaseFile == null) {
+                val cues = cueGroup.cues
+                handler.postDelayed({ delayedSubs?.setCues(cues) }, subDelayMs)
+            }
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            applyEvenVolume(audioSessionId)
+        }
+
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
             handler.postDelayed({ matchFrameRate() }, 300)
         }
@@ -1303,8 +1564,8 @@ class PlayerActivity : AppCompatActivity() {
                 }
             } else if (state == Player.STATE_ENDED) {
                 val item = current
-                if (item.isLive && shiftStartMs > 0) {
-                    goLive() // caught up with the end of the archive window
+                if (item.isLive && (shiftStartMs > 0 || localPlaying)) {
+                    goLive() // caught up with the end of the archive window / the copy on the device
                 } else if (item.isLive) {
                     // A live stream that "ends" has dropped: reconnect.
                     handler.postDelayed(retry, 1500)
@@ -1495,7 +1756,7 @@ class PlayerActivity : AppCompatActivity() {
 
         when (event.keyCode) {
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
-                if (down) optionsMenu()
+                if (down) quickSettings()
                 return true
             }
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_MEDIA_NEXT -> if (live || items.size > 1) {
@@ -1618,9 +1879,11 @@ class PlayerActivity : AppCompatActivity() {
         handler.removeCallbacks(hideSeek)
         handler.removeCallbacks(applySeek)
         handler.postDelayed(applySeek, 650)
+        showPreview(target)
     }
 
     private fun commitSeek() {
+        handler.postDelayed({ hidePreview() }, 700)
         val p = player ?: return
         if (pendingSeekMs != 0L) p.seekTo((p.currentPosition + pendingSeekMs).coerceAtLeast(0))
         pendingSeekMs = 0L
@@ -1664,6 +1927,11 @@ class PlayerActivity : AppCompatActivity() {
             setOnClickListener { cycleFit() }
         }
         bar.addView(btn, 0)
+        bar.addView(android.widget.ImageButton(this, null, 0, androidx.media3.ui.R.style.ExoStyledControls_Button_Bottom).apply {
+            setImageResource(R.drawable.ic_tune)
+            contentDescription = Tr.s("Quick settings")
+            setOnClickListener { quickSettings() }
+        }, 0)
         // Small-window button (cars, phones, tablets, and TVs that support it).
         if (packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             val pip = android.widget.ImageButton(this, null, 0, androidx.media3.ui.R.style.ExoStyledControls_Button_Bottom).apply {
@@ -1692,7 +1960,7 @@ class PlayerActivity : AppCompatActivity() {
         val options = ArrayList<Pair<String, () -> Unit>>()
         if (current.isLive) {
             val canShift = Repo.canTimeshift(liveChannel)
-            if (shiftStartMs > 0) options.add("⏩  Back to live" to { goLive() })
+            if (shiftStartMs > 0 || localPlaying) options.add("⏩  Back to live" to { goLive() })
             else if (player?.isCurrentMediaItemSeekable == true && player?.isCurrentMediaItemLive == true &&
                 (player?.currentLiveOffset ?: 0L) > 10_000L
             ) options.add("⏩  Back to live" to { player?.seekToDefaultPosition() })
@@ -1841,13 +2109,15 @@ class PlayerActivity : AppCompatActivity() {
                 return@launch
             }
             val p = player ?: return@launch
-            extraSubs = listOf(
-                androidx.media3.common.MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
-                    .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                    .setLanguage(r.language)
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build()
-            )
+            val cfg = androidx.media3.common.MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                .setLanguage(r.language)
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+            extraSubs = listOf(cfg)
+            subBaseFile = file
+            subBaseConfig = cfg
+            subDelayMs = 0L
             startPos = p.currentPosition
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
