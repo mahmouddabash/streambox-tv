@@ -85,8 +85,14 @@ object Downloads {
         Prefs.downloadsJson = arr.toString()
     }
 
+    /**
+     * Every change reads and writes the list under one lock, so the download worker (updating
+     * progress) and the screens (adding, deleting) can never overwrite each other's changes.
+     */
     @Synchronized
-    fun update(id: String, f: (Item) -> Item) = save(all().map { if (it.id == id) f(it) else it })
+    private fun mutate(f: (List<Item>) -> List<Item>) = save(f(all()))
+
+    fun update(id: String, f: (Item) -> Item) = mutate { l -> l.map { if (it.id == id) f(it) else it } }
 
     fun get(id: String) = all().firstOrNull { it.id == id }
 
@@ -140,15 +146,26 @@ object Downloads {
 
     /** Adds a title to the queue (ignored if it is already downloaded or queued). */
     fun add(context: Context, key: String, title: String, poster: String, url: String): Boolean {
-        if (all().any { it.key == key && it.profileId == Repo.profileId && it.status != FAILED }) return false
         val ext = url.substringBefore('?').substringAfterLast('.', "mp4").take(5).lowercase()
             .let { if (it.isBlank() || it in setOf("m3u8", "m3u", "php", "mpd")) "ts" else it }
         val safe = title.ifBlank { "Video" }.replace(Regex("[^\\p{L}\\p{N} ._-]+"), "_").take(70).trim()
-        val file = File(dir(context), "$safe.$ext")
-        val item = Item("dl${System.nanoTime()}", Repo.profileId, key, title.ifBlank { file.nameWithoutExtension }, poster, url, file.absolutePath, QUEUED)
-        save(all().filterNot { it.key == key && it.profileId == Repo.profileId } + item)
-        DownloadService.start(context)
-        return true
+        val folder = dir(context)
+        var added = false
+        mutate { list ->
+            if (list.any { it.key == key && it.profileId == Repo.profileId && it.status != FAILED }) return@mutate list
+            val old = list.filter { it.key == key && it.profileId == Repo.profileId }
+            old.forEach { o -> companions(o.file).forEach { File(it).delete() } }
+            val rest = list - old.toSet()
+            // Never share a file with another download (same title in two profiles, two "HD" copies…).
+            val used = rest.map { it.file }.toSet()
+            var file = File(folder, "$safe.$ext")
+            var n = 2
+            while (file.absolutePath in used || file.exists()) file = File(folder, "$safe ($n).$ext").also { n++ }
+            added = true
+            rest + Item("dl${System.nanoTime()}", Repo.profileId, key, title.ifBlank { file.nameWithoutExtension }, poster, url, file.absolutePath, QUEUED)
+        }
+        if (added) DownloadService.start(context)
+        return added
     }
 
     fun pause(context: Context, id: String) {
@@ -163,7 +180,7 @@ object Downloads {
 
     fun delete(context: Context, id: String) {
         val item = get(id) ?: return
-        save(all().filterNot { it.id == id })
+        mutate { l -> l.filterNot { it.id == id } }
         progress.remove(id)
         companions(item.file).forEach { File(it).delete() }
         DownloadService.start(context)
@@ -202,7 +219,7 @@ object Downloads {
      */
     fun deleteMany(context: Context, ids: Set<String>, cleanLeftovers: Boolean): Int {
         val gone = all().filter { it.id in ids }
-        save(all().filterNot { it.id in ids })
+        mutate { l -> l.filterNot { it.id in ids } }
         gone.forEach {
             progress.remove(it.id)
             try {
@@ -223,19 +240,20 @@ object Downloads {
     /** After a reboot or crash nothing is "running": put it back in the queue. */
     fun recover(context: Context) {
         // Earlier builds could mark a server error reply as "downloaded": flag those so they can be retried.
-        val broken = all().filter { it.status == DONE && badFileReason(File(it.file)) != null }
-        if (broken.isNotEmpty()) save(all().map { d ->
+        // Only files that exist: a download on a USB drive that is unplugged right now is left alone.
+        val broken = all().filter { it.status == DONE && File(it.file).exists() && badFileReason(File(it.file)) != null }
+        if (broken.isNotEmpty()) mutate { l -> l.map { d ->
             if (broken.any { it.id == d.id }) {
                 val why = badFileReason(File(d.file)) ?: ""
                 File(d.file).delete()
                 d.copy(status = FAILED, total = 0, note = why)
             } else d
-        })
+        } }
         if (all().any { it.status == RUNNING }) {
-            save(all().map { if (it.status == RUNNING) it.copy(status = QUEUED) else it })
+            mutate { l -> l.map { if (it.status == RUNNING) it.copy(status = QUEUED) else it } }
         }
         val hls = all().filter { it.status == FAILED && it.note.startsWith("Your server sends this title as a live stream playlist") }
-        if (hls.isNotEmpty()) save(all().map { d -> if (hls.any { it.id == d.id }) d.copy(status = QUEUED, note = "", total = 0) else d })
+        if (hls.isNotEmpty()) mutate { l -> l.map { d -> if (hls.any { it.id == d.id }) d.copy(status = QUEUED, note = "", total = 0) else d } }
         if (all().any { it.status == QUEUED || needsIndex(it) }) DownloadService.start(context)
     }
 }

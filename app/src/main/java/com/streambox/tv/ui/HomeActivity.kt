@@ -115,9 +115,10 @@ class HomeActivity : AppCompatActivity() {
                 .show()
         }
         val downloads = findViewById<Button>(R.id.tileDownloads)
-        downloads.setOnClickListener { startActivity(Intent(this, DownloadsActivity::class.java)) }
+        // Kids profiles need the parental PIN: downloads and recordings aren't filtered for children.
+        downloads.setOnClickListener { Ui.guardKids(this) { startActivity(Intent(this, DownloadsActivity::class.java)) } }
         val rec = findViewById<Button>(R.id.tileRec)
-        rec.setOnClickListener { startActivity(Intent(this, RecordingsActivity::class.java)) }
+        rec.setOnClickListener { Ui.guardKids(this) { startActivity(Intent(this, RecordingsActivity::class.java)) } }
         val settings = findViewById<Button>(R.id.tileSettings)
         val profiles = findViewById<Button>(R.id.tileProfiles)
         nav = listOf(live, movies, series)
