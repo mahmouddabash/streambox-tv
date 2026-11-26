@@ -226,8 +226,14 @@ object Prefs {
         get() = sp.getInt("recStorage", 0)
         set(v) = sp.edit().putInt("recStorage", v).apply()
 
+    /** A key typed in Settings (the built-in one is never shown). */
+    val ownTmdbKey: String get() = sp.getString("tmdbKey", "") ?: ""
+
+    /** The TMDB key typed in Settings, else the one built into the app. */
     var tmdbKey: String
-        get() = sp.getString("tmdbKey", "") ?: ""
+        get() = (sp.getString("tmdbKey", "") ?: "").ifBlank {
+            if (Secret.TMDB_KEY.isEmpty()) "" else try { Secret.reveal(Secret.TMDB_KEY) } catch (_: Exception) { "" }
+        }
         set(v) = sp.edit().putString("tmdbKey", v.trim()).apply()
 
     var openSubtitlesKey: String

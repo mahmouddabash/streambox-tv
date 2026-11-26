@@ -266,8 +266,12 @@ class SettingsActivity : AppCompatActivity() {
                 refresh()
             }
         })
-        rows.add(Row("TMDB API key", if (Prefs.tmdbKey.isBlank()) "Not set. Free key from themoviedb.org → Settings → API; adds HD backdrops, cast photos and trailers" else "Set ✓") {
-            Ui.input(this, "TMDB API key (v3)", Prefs.tmdbKey, InputType.TYPE_CLASS_TEXT) {
+        rows.add(Row("TMDB API key", when {
+            Prefs.ownTmdbKey.isNotBlank() -> "Your own key ✓"
+            Prefs.tmdbKey.isNotBlank() -> "Built in ✓   •   enter your own key to replace it"
+            else -> "Not set. Free key from themoviedb.org → Settings → API; adds HD backdrops, cast photos and trailers"
+        }) {
+            Ui.input(this, "TMDB API key (v3)", Prefs.ownTmdbKey, InputType.TYPE_CLASS_TEXT) {
                 Prefs.tmdbKey = it
                 refresh()
             }
