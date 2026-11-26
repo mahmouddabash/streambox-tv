@@ -518,7 +518,8 @@ object Repo {
 
     fun moviesIn(catId: String): List<Movie> {
         val locked = lockedIds(SECTION_VOD, vodCats) + hiddenCatIds(SECTION_VOD)
-        return when (catId) {
+        val hid = Prefs.hidden(userKey)
+        val list = when (catId) {
             CAT_ALL -> movies.filter { it.categoryId !in locked }
             CAT_FAV -> {
                 val fav = Prefs.favourites(userKey, Prefs.FAV_VOD)
@@ -527,11 +528,13 @@ object Repo {
             CAT_CONTINUE -> continueWatching(200).mapNotNull { it.movie }
             else -> movies.filter { it.categoryId == catId }
         }
+        return if (hid.isEmpty()) list else list.filter { "m:${it.id}" !in hid }
     }
 
     fun seriesIn(catId: String): List<Series> {
         val locked = lockedIds(SECTION_SERIES, seriesCats) + hiddenCatIds(SECTION_SERIES)
-        return when (catId) {
+        val hid = Prefs.hidden(userKey)
+        val list = when (catId) {
             CAT_ALL -> series.filter { it.categoryId !in locked }
             CAT_FAV -> {
                 val fav = Prefs.favourites(userKey, Prefs.FAV_SERIES)
@@ -540,6 +543,35 @@ object Repo {
             CAT_CONTINUE -> continueWatching(200).mapNotNull { it.series }
             else -> series.filter { it.categoryId == catId }
         }
+        return if (hid.isEmpty()) list else list.filter { "s:${it.id}" !in hid }
+    }
+
+    /** "Because you watched": best-rated titles from the same category as the latest film watched. */
+    fun becauseYouWatchedMovie(limit: Int = 20): Pair<Movie, List<Movie>>? {
+        val hid = Prefs.hidden(userKey)
+        val last = Prefs.resumeIds("vod_${userKey}_").firstNotNullOfOrNull { movieById[it] } ?: return null
+        val watched = Prefs.resumeIds("vod_${userKey}_").toSet()
+        val list = moviesIn(last.categoryId).filter { it.id != last.id && it.id !in watched && "m:${it.id}" !in hid }
+            .sortedByDescending { it.rating.toDoubleOrNull() ?: 0.0 }.take(limit)
+        return if (list.size >= 3) last to list else null
+    }
+
+    /** Same idea for series: same genre (from the provider), else the same category. */
+    fun becauseYouWatchedSeries(limit: Int = 20): Pair<Series, List<Series>>? {
+        val last = recentSeries(1).firstOrNull() ?: return null
+        val genres = last.genre.split(',', '/', '|').map { it.trim().lowercase() }.filter { it.length > 2 }
+        val pool = seriesIn(CAT_ALL).filter { it.id != last.id }
+        val byGenre = if (genres.isEmpty()) emptyList() else pool.filter { s -> genres.any { s.genre.lowercase().contains(it) } }
+        val list = (byGenre.ifEmpty { pool.filter { it.categoryId == last.categoryId } })
+            .sortedByDescending { it.rating.toDoubleOrNull() ?: 0.0 }.take(limit)
+        return if (list.size >= 3) last to list else null
+    }
+
+    /** A random film for "Surprise me": prefers rated 7+, never hidden or locked. */
+    fun surpriseMovie(): Movie? {
+        val all = moviesIn(CAT_ALL)
+        val good = all.filter { (it.rating.toDoubleOrNull() ?: 0.0) >= 7.0 }
+        return (good.ifEmpty { all }).randomOrNull()
     }
 
     // ------------------------------------------------------------------ Home rows

@@ -95,6 +95,27 @@ object Tmdb {
         }
     }
 
+    /** This week's most popular films and series on TMDB: (title, isMovie), original titles included. */
+    suspend fun trendingTitles(): List<Pair<String, Boolean>> = withContext(Dispatchers.IO) {
+        if (!enabled) return@withContext emptyList()
+        val out = ArrayList<Pair<String, Boolean>>()
+        try {
+            for (page in 1..3) {
+                val u = "https://api.themoviedb.org/3/trending/all/week".toHttpUrl().newBuilder()
+                    .addQueryParameter("api_key", Prefs.tmdbKey).addQueryParameter("page", "$page").build()
+                val res = JSONObject(get(u.toString())).optJSONArray("results") ?: break
+                for (i in 0 until res.length()) {
+                    val o = res.getJSONObject(i)
+                    val movie = o.optString("media_type") == "movie"
+                    listOf(o.optString("title"), o.optString("name"), o.optString("original_title"), o.optString("original_name"))
+                        .filter { it.isNotBlank() }.distinct().forEach { out.add(it to movie) }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        out
+    }
+
     /** An actor found by name, with the titles they appear in (title, isMovie). */
     data class Credits(val name: String, val photo: String, val titles: List<Pair<String, Boolean>>)
 

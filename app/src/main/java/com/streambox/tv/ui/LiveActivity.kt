@@ -121,7 +121,7 @@ class LiveActivity : AppCompatActivity() {
             bind = { v, c, _ ->
                 v.findViewById<TextView>(R.id.num).text = c.num.toString()
                 v.findViewById<TextView>(R.id.name).text = withNow(c)
-                v.findViewById<ImageView>(R.id.logo).loadUrl(c.logo)
+                v.findViewById<ImageView>(R.id.logo).loadLogo(c.logo, c.name)
                 val badge = if (c.id in favs) "★" else ""
                 v.findViewById<TextView>(R.id.badge).text = badge
             },

@@ -38,6 +38,48 @@ fun ImageView.loadUrl(url: String?) {
     }
 }
 
+/** Channel logo, or a coloured circle with the channel's initials when there is none / it fails to load. */
+fun ImageView.loadLogo(url: String?, name: String) {
+    val fallback = InitialsDrawable(name)
+    if (url.isNullOrBlank()) {
+        setImageDrawable(fallback)
+        return
+    }
+    load(url) {
+        crossfade(true)
+        placeholder(fallback)
+        error(fallback)
+    }
+}
+
+class InitialsDrawable(name: String) : android.graphics.drawable.Drawable() {
+    private val text = name.replace(Regex("^[A-Za-z]{2,3}\\s*[|:-]\\s*"), "")
+        .split(' ', '-', '_').filter { it.isNotBlank() && it.first().isLetterOrDigit() }
+        .take(2).joinToString("") { it.first().uppercase() }.ifEmpty { "TV" }
+    private val bg = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        val colors = intArrayOf(0xFF5A55D6.toInt(), 0xFFB0446A.toInt(), 0xFF17807F.toInt(), 0xFFB5702A.toInt(), 0xFF3F7D3A.toInt(), 0xFF2F6BFF.toInt())
+        color = colors[(name.hashCode() and 0x7fffffff) % colors.size]
+    }
+    private val fg = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+
+    override fun draw(c: android.graphics.Canvas) {
+        val b = bounds
+        val r = minOf(b.width(), b.height()) / 2f
+        c.drawCircle(b.exactCenterX(), b.exactCenterY(), r, bg)
+        fg.textSize = r * (if (text.length > 1) 0.8f else 1f)
+        c.drawText(text, b.exactCenterX(), b.exactCenterY() - (fg.descent() + fg.ascent()) / 2, fg)
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(cf: android.graphics.ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+}
+
 object Ui {
     /** Opens a YouTube trailer in the YouTube app (or browser). */
     fun openTrailer(activity: Activity, youtubeId: String) {
@@ -179,6 +221,27 @@ object Ui {
     // ------------------------------------------------------------------ Viewers
 
     /** Runs [action] directly, or after the PIN when a Kids profile is active. */
+    /** Adds "Hide" after [anchor]: the title disappears from every row, list and search for this viewer. */
+    fun addHideButton(activity: Activity, anchor: android.widget.Button, item: String) {
+        val parent = anchor.parent as? android.view.ViewGroup ?: return
+        val b = android.widget.Button(activity, null, 0, com.streambox.tv.R.style.Btn)
+        b.text = Tr.s("🚫  Hide")
+        b.setOnClickListener {
+            android.app.AlertDialog.Builder(activity)
+                .setTitle(Tr.s("Hide this title?"))
+                .setMessage(Tr.s("It won't appear in rows, lists or search for this viewer. Undo in Settings → Hidden titles."))
+                .setPositiveButton(Tr.s("🚫  Hide")) { _, _ ->
+                    com.streambox.tv.data.Prefs.setHidden(com.streambox.tv.data.Repo.userKey, item, true)
+                    activity.toast("Hidden")
+                    activity.finish()
+                }
+                .setNegativeButton(Tr.s("Cancel"), null)
+                .show()
+        }
+        val lp = android.view.ViewGroup.LayoutParams(anchor.layoutParams)
+        parent.addView(b, parent.childCount, lp)
+    }
+
     /** Adds a "Watch later" toggle right after [anchor] (the My list button). [item] = "m:<id>" or "s:<id>". */
     fun addWatchLaterButton(activity: Activity, anchor: android.widget.Button, item: String) {
         val parent = anchor.parent as? android.view.ViewGroup ?: return

@@ -121,6 +121,13 @@ class HomeActivity : AppCompatActivity() {
         rec.setOnClickListener { Ui.guardKids(this) { startActivity(Intent(this, RecordingsActivity::class.java)) } }
         val settings = findViewById<Button>(R.id.tileSettings)
         val profiles = findViewById<Button>(R.id.tileProfiles)
+        findViewById<Button>(R.id.tileSurprise).setOnClickListener {
+            val m = if (Repo.loaded) Repo.surpriseMovie() else null
+            if (m == null) toast("Nothing to pick from yet") else {
+                toast(Tr.s("🎲  Surprise: {}").replace("{}", m.name))
+                startActivity(Intent(this, MovieDetailActivity::class.java).putExtra(MovieDetailActivity.EXTRA_ID, m.id))
+            }
+        }
         nav = listOf(live, movies, series)
 
         live.setOnClickListener { startActivity(Intent(this, LiveActivity::class.java)) }
@@ -207,6 +214,42 @@ class HomeActivity : AppCompatActivity() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
+    /** Trending on TMDB this week that your provider has (needs a TMDB key); loaded once per start. */
+    private fun loadTrending() {
+        if (!com.streambox.tv.data.Tmdb.enabled || trending != null) return
+        trending = emptyList()
+        lifecycleScope.launch {
+            val titles = com.streambox.tv.data.Tmdb.trendingTitles()
+            if (titles.isEmpty()) return@launch
+            val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                fun n(s: String) = com.streambox.tv.data.Tmdb.cleanTitle(s).first.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+                val mi = Repo.moviesIn(Repo.CAT_ALL).groupBy { n(it.name) }
+                val si = Repo.seriesIn(Repo.CAT_ALL).groupBy { n(it.name) }
+                val out = LinkedHashSet<Any>()
+                for ((t, isMovie) in titles) {
+                    (if (isMovie) mi[n(t)] else si[n(t)])?.firstOrNull()?.let { out.add(it) }
+                }
+                out.toList()
+            }
+            trending = found
+            if (found.isNotEmpty()) {
+                buildRows()
+                restoreFocus()
+            }
+        }
+    }
+
+    /** The current viewer's picture on the profile button (when there are several viewers). */
+    private fun showViewerAvatar() {
+        val b = findViewById<Button>(R.id.tileProfiles)
+        if (Prefs.viewers(Repo.profileId).isEmpty()) return
+        val id = Prefs.currentViewer(Repo.profileId)
+        val av = if (id.isEmpty()) Prefs.mainViewerAvatar else Prefs.viewers(Repo.profileId).firstOrNull { it.id == id }?.avatar ?: 0
+        b.text = ViewersActivity.AVATARS[av % ViewersActivity.AVATARS.size]
+        b.textSize = 20f
+        b.setCompoundDrawables(null, null, null, null)
+    }
+
     /** Plays a channel, with the favourites (or its category) as the up/down zapping list. */
     private fun playChannelById(id: String) {
         val c = Repo.channel(id) ?: return
@@ -266,6 +309,8 @@ class HomeActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.accountInfo).text = parts.joinToString("   •   ")
 
         buildRows()
+        showViewerAvatar()
+        loadTrending()
         // Several viewers: ask who's watching once per app start.
         if (!viewerAsked && Prefs.viewers(Repo.profileId).isNotEmpty()) {
             viewerAsked = true
@@ -327,6 +372,11 @@ class HomeActivity : AppCompatActivity() {
                 .sortedByDescending { it.addedAt }.take(30)
                 .takeIf { it.isNotEmpty() }
                 ?.let { list -> out.add(Row("Downloaded", list.map { Card(Kind.DOWNLOAD, it.id, it.title, it.poster, "⬇") })) }
+        }
+        Repo.becauseYouWatchedMovie()?.let { (m, list) -> out.add(Row("Because you watched ${m.name}", list.map { movieCard(it) })) }
+        Repo.becauseYouWatchedSeries()?.let { (s, list) -> out.add(Row("Because you watched ${s.name}", list.map(::seriesCard))) }
+        trending?.takeIf { it.isNotEmpty() }?.let { list ->
+            out.add(Row("Trending this week", list.map { if (it is Movie) movieCard(it) else seriesCard(it as Series) }))
         }
         Repo.watchLater().takeIf { it.isNotEmpty() }?.let { list ->
             out.add(Row("Watch later", list.map { if (it is Movie) movieCard(it) else seriesCard(it as Series) }))
@@ -624,5 +674,7 @@ class HomeActivity : AppCompatActivity() {
         private var viewerAsked = false
         const val EXTRA_RESTORE = "restore"
         const val EXTRA_PLAY_CHANNEL = "play_channel"
+        /** Trending titles found at the provider (per app start). */
+        private var trending: List<Any>? = null
     }
 }

@@ -23,8 +23,47 @@ class App : Application(), coil.ImageLoaderFactory {
         com.streambox.tv.data.Downloads.recover(this)
         keepContentClearOfSystemBars()
         addTouchBackArrow()
+        addNightMode()
         Prefs.isTouchDevice = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN) &&
             !packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+    }
+
+    /** Night mode: a soft dark layer over every screen (video included) at night or always. */
+    private fun addNightMode() {
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityResumed(a: android.app.Activity) {
+                val content = a.findViewById<android.widget.FrameLayout>(android.R.id.content) ?: return
+                val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                val on = when (Prefs.nightMode) {
+                    2 -> true
+                    1 -> h >= 22 || h < 6
+                    else -> false
+                }
+                var layer = content.findViewWithTag<android.view.View>("sb_night")
+                if (!on) {
+                    layer?.let { content.removeView(it) }
+                    return
+                }
+                if (layer == null) {
+                    layer = android.view.View(a).apply {
+                        tag = "sb_night"
+                        setBackgroundColor(0x59000000) // ~35 % darker
+                        isClickable = false
+                        isFocusable = false
+                        importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }
+                    content.addView(layer, android.widget.FrameLayout.LayoutParams(-1, -1))
+                }
+                layer.bringToFront()
+                layer.elevation = 100f
+            }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityStarted(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivityStopped(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
     }
 
     /**

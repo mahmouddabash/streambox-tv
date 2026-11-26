@@ -366,6 +366,15 @@ class PlayerActivity : AppCompatActivity() {
                 }
             } else stuckMs = 0
             lastPos = p.currentPosition
+            // Viewing stats (Settings → Viewing stats).
+            if (p.isPlaying && items.isNotEmpty()) {
+                val kind = when {
+                    current.isLive -> "live"
+                    current.key.startsWith("ep_") -> "series"
+                    else -> "movies"
+                }
+                Prefs.addWatchTime(Repo.userKey, kind, if (current.isLive) current.channelId else "", 3000)
+            }
             handler.postDelayed(this, 3000)
         }
     }
@@ -503,7 +512,7 @@ class PlayerActivity : AppCompatActivity() {
                 v.findViewById<TextView>(R.id.num).text = c?.num?.toString() ?: ""
                 v.findViewById<TextView>(R.id.name).text = it.title
                 val logo = v.findViewById<android.widget.ImageView>(R.id.logo)
-                if (c != null && c.logo.isNotBlank()) logo.loadUrl(c.logo) else logo.setImageDrawable(null)
+                if (c != null) logo.loadLogo(c.logo, c.name) else logo.setImageDrawable(null)
                 v.findViewById<TextView>(R.id.badge).text = if (it.channelId == current.channelId) "▶" else ""
             },
             onClick = { item, pos -> playFromPanel(item, pos) }

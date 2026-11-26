@@ -21,7 +21,15 @@ import com.streambox.tv.data.Repo
 class BrowseActivity : AppCompatActivity() {
 
     /** Common shape for a movie or a series in the grid. */
-    private data class Card(val id: String, val name: String, val poster: String, val rating: String)
+    private data class Card(val id: String, val name: String, val poster: String, val rating: String, val added: Long = 0L) {
+        val year: String get() = com.streambox.tv.data.Tmdb.cleanTitle(name).second
+    }
+
+    /** 0 provider order, 1 newest added, 2 highest rated, 3 A–Z, 4 newest year (remembered). */
+    private var sortMode: Int
+        get() = com.streambox.tv.data.Prefs.sortMode
+        set(v) { com.streambox.tv.data.Prefs.sortMode = v }
+    private val sortNames = arrayOf("Provider order", "Newest added", "Highest rated", "A–Z", "Newest year")
 
     private var section = Repo.SECTION_VOD
     private val favType: String get() = if (section == Repo.SECTION_VOD) Prefs.FAV_VOD else Prefs.FAV_SERIES
@@ -43,6 +51,15 @@ class BrowseActivity : AppCompatActivity() {
         section = intent.getStringExtra(EXTRA_SECTION) ?: Repo.SECTION_VOD
         findViewById<TextView>(R.id.title).text = if (section == Repo.SECTION_VOD) "Movies" else "Series"
         search = findViewById(R.id.search)
+        (search.parent as? android.view.ViewGroup)?.let { parent ->
+            val b = android.widget.Button(this, null, 0, R.style.Btn)
+            b.text = Tr.s("⇅  " + sortNames[sortMode.coerceIn(0, sortNames.size - 1)])
+            b.setOnClickListener { chooseSort() }
+            parent.addView(b, parent.indexOfChild(search) + 1, android.view.ViewGroup.MarginLayoutParams(-2, -2).apply {
+                marginStart = (10 * resources.displayMetrics.density).toInt()
+            })
+            sortButton = b
+        }
         empty = findViewById(R.id.empty)
 
         catAdapter = SimpleAdapter(
@@ -69,7 +86,8 @@ class BrowseActivity : AppCompatActivity() {
                 v.findViewById<TextView>(R.id.title).text = c.name
                 v.findViewById<ImageView>(R.id.poster).loadUrl(c.poster)
                 val r = c.rating.toFloatOrNull()
-                val badge = (if (c.id in favs) "★ " else "") + (if (r != null && r > 0f) c.rating else "")
+                val badge = (if (c.id in favs) "★ " else "") + (if (r != null && r > 0f) "★ " + c.rating.take(3) else "") +
+                    (if (c.year.isNotEmpty()) "  ${c.year}" else "")
                 val b = v.findViewById<TextView>(R.id.badge)
                 b.text = badge.trim()
                 b.visibility = if (badge.isBlank()) View.GONE else View.VISIBLE
@@ -146,19 +164,48 @@ class BrowseActivity : AppCompatActivity() {
         Prefs.setLastCategory(Repo.profileId, section, id)
         favs = Prefs.favourites(Repo.userKey, favType)
         cards = if (section == Repo.SECTION_VOD) {
-            Repo.moviesIn(id).map { Card(it.id, it.name, it.poster, it.rating) }
+            Repo.moviesIn(id).map { Card(it.id, it.name, it.poster, it.rating, it.added) }
         } else {
-            Repo.seriesIn(id).map { Card(it.id, it.name, it.poster, it.rating) }
+            Repo.seriesIn(id).map { Card(it.id, it.name, it.poster, it.rating, it.added) }
         }
         applyFilter()
     }
 
     private fun applyFilter() {
         val q = search.text.toString().trim()
-        val list = if (q.isEmpty()) cards else cards.filter { it.name.contains(q, ignoreCase = true) }
+        val filtered = if (q.isEmpty()) cards else cards.filter { it.name.contains(q, ignoreCase = true) }
+        val list = when (sortMode) {
+            1 -> filtered.sortedByDescending { it.added }
+            2 -> filtered.sortedByDescending { it.rating.toDoubleOrNull() ?: 0.0 }
+            3 -> filtered.sortedBy { it.name.lowercase() }
+            4 -> filtered.sortedByDescending { it.year.toIntOrNull() ?: 0 }
+            else -> filtered
+        }
         gridAdapter.submit(list)
         empty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
     }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+            chooseSort()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun chooseSort() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(Tr.s("Sort by"))
+            .setSingleChoiceItems(sortNames.map { Tr.s(it) }.toTypedArray(), sortMode) { d, w ->
+                sortMode = w
+                sortButton?.text = Tr.s("⇅  " + sortNames[w])
+                applyFilter()
+                d.dismiss()
+            }
+            .show()
+    }
+
+    private var sortButton: android.widget.Button? = null
 
     private fun open(c: Card) {
         Prefs.setLastItem(Repo.profileId, section, c.id)

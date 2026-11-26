@@ -165,6 +165,18 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         })
+        val nightOpts = arrayOf("Off", "At night (22:00 – 06:00)", "Always")
+        rows.add(Row("Night mode", nightOpts[Prefs.nightMode.coerceIn(0, 2)] + "   •   " + "a softer, darker screen") {
+            choose("Night mode", nightOpts, Prefs.nightMode.coerceIn(0, 2)) {
+                Prefs.nightMode = it
+                recreate()
+            }
+        })
+        rows.add(Row("Viewing stats", "Hours watched, live vs movies vs series, top channels") { showStats() })
+        val hiddenCount = Prefs.hidden(Repo.userKey).size
+        rows.add(Row("Hidden titles", if (hiddenCount == 0) "None: use 🚫 Hide on a film or series page" else "$hiddenCount hidden   •   choose to show them again") {
+            manageHidden()
+        })
         rows.add(Row("Skip intro", if (Prefs.autoSkipIntro) "Automatic: marked intros are skipped by themselves" else "Button: a Skip intro button appears (mark an intro from the player menu)") {
             Prefs.autoSkipIntro = !Prefs.autoSkipIntro
             refresh()
@@ -269,6 +281,52 @@ class SettingsActivity : AppCompatActivity() {
             toast("Resume positions cleared")
         })
         adapter.submit(rows)
+    }
+
+    private fun showStats() {
+        val o = Prefs.watchStats(Repo.userKey)
+        fun h(ms: Long) = String.format(java.util.Locale.US, "%.1f h", ms / 3_600_000.0)
+        val ch = o.optJSONObject("ch")
+        val top = ArrayList<Pair<String, Long>>()
+        ch?.keys()?.forEach { k -> top.add((Repo.channel(k)?.name ?: k) to ch.optLong(k)) }
+        val lines = StringBuilder()
+        lines.append(Tr.s("Total") + ":  " + h(o.optLong("total"))).append('\n')
+        lines.append(Tr.s("Live TV") + ":  " + h(o.optLong("live"))).append('\n')
+        lines.append(Tr.s("Movies") + ":  " + h(o.optLong("movies"))).append('\n')
+        lines.append(Tr.s("Series") + ":  " + h(o.optLong("series"))).append("\n\n")
+        val best = top.sortedByDescending { it.second }.take(5)
+        if (best.isNotEmpty()) {
+            lines.append(Tr.s("Top channels")).append('\n')
+            best.forEachIndexed { i, (n, ms) -> lines.append("${i + 1}.  $n   ${h(ms)}\n") }
+        }
+        if (o.has("since")) lines.append("\n" + Tr.s("Since") + " " + Ui.date(o.optLong("since")))
+        AlertDialog.Builder(this)
+            .setTitle(Tr.s("Viewing stats") + (if (Repo.viewerName.isNotEmpty()) "  •  " + Repo.viewerName else ""))
+            .setMessage(lines.toString())
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun manageHidden() {
+        val items = Prefs.hidden(Repo.userKey).toList()
+        if (items.isEmpty()) {
+            toast("Nothing hidden")
+            return
+        }
+        val names = items.map {
+            if (it.startsWith("m:")) "🎬  " + (Repo.movie(it.substring(2))?.name ?: it)
+            else "📺  " + (Repo.seriesItem(it.substring(2))?.name ?: it)
+        }.toTypedArray()
+        val checked = BooleanArray(items.size)
+        AlertDialog.Builder(this)
+            .setTitle(Tr.s("Show again"))
+            .setMultiChoiceItems(names, checked) { _, w, on -> checked[w] = on }
+            .setPositiveButton(Tr.s("Show again")) { _, _ ->
+                items.forEachIndexed { i, k -> if (checked[i]) Prefs.setHidden(Repo.userKey, k, false) }
+                refresh()
+            }
+            .setNegativeButton(Tr.s("Cancel"), null)
+            .show()
     }
 
     private fun choose(title: String, options: Array<String>, current: Int, onPick: (Int) -> Unit) {

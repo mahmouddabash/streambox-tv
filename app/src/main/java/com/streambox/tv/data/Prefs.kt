@@ -526,6 +526,42 @@ object Prefs {
         get() = sp.getInt("dataSaver", 0)
         set(v) = sp.edit().putInt("dataSaver", v).apply()
 
+    /** Titles a viewer hid ("m:<id>" / "s:<id>"): left out of every row, list and search. */
+    fun hidden(userKey: String): Set<String> = sp.getStringSet("hid_$userKey", emptySet()) ?: emptySet()
+
+    fun setHidden(userKey: String, item: String, on: Boolean) {
+        val s = HashSet(hidden(userKey))
+        if (on) s.add(item) else s.remove(item)
+        sp.edit().putStringSet("hid_$userKey", s).apply()
+    }
+
+    /** Night mode: 0 off, 1 from 22:00 to 06:00, 2 always. */
+    var nightMode: Int
+        get() = sp.getInt("nightMode", 0)
+        set(v) = sp.edit().putInt("nightMode", v).apply()
+
+    /** Viewing time per viewer: total, live, movies, series (ms) and per-channel minutes. */
+    fun addWatchTime(userKey: String, kind: String, channelId: String, ms: Long) {
+        val o = try { JSONObject(sp.getString("stats_$userKey", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+        o.put("total", o.optLong("total") + ms)
+        o.put(kind, o.optLong(kind) + ms)
+        if (channelId.isNotEmpty()) {
+            val ch = o.optJSONObject("ch") ?: JSONObject()
+            ch.put(channelId, ch.optLong(channelId) + ms)
+            o.put("ch", ch)
+        }
+        if (!o.has("since")) o.put("since", System.currentTimeMillis())
+        sp.edit().putString("stats_$userKey", o.toString()).apply()
+    }
+
+    fun watchStats(userKey: String): JSONObject =
+        try { JSONObject(sp.getString("stats_$userKey", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+
+    /** Sort order in the Movies / Series grids. */
+    var sortMode: Int
+        get() = sp.getInt("sortMode", 0)
+        set(v) = sp.edit().putInt("sortMode", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

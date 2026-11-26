@@ -97,6 +97,7 @@
                 android:textSize="13sp" />
 
             <Button android:id="@+id/tileSearch" style="@style/IconBtn" android:drawableStart="@drawable/ic_search_nav" />
+            <Button android:id="@+id/tileSurprise" style="@style/IconBtn" android:drawableStart="@drawable/ic_dice_nav" />
             <Button android:id="@+id/tileMulti" style="@style/IconBtn" android:drawableStart="@drawable/ic_grid_nav" />
             <Button android:id="@+id/tileDownloads" style="@style/IconBtn" android:drawableStart="@drawable/ic_download_nav" />
             <Button android:id="@+id/tileRec" style="@style/IconBtn" android:drawableStart="@drawable/ic_rec_nav" />
