@@ -144,9 +144,34 @@ class SearchActivity : AppCompatActivity() {
             if (result.first.isNotEmpty()) out.add("Channels (${result.first.size})" to result.first)
             if (result.second.isNotEmpty()) out.add("Movies (${result.second.size})" to result.second)
             if (result.third.isNotEmpty()) out.add("Series (${result.third.size})" to result.third)
+            // Actors: series whose cast (from the provider) includes the name.
+            val byCast = withContext(Dispatchers.Default) {
+                Repo.seriesIn(Repo.CAT_ALL).filter { s -> s.cast.isNotBlank() && match(s.cast) && s !in result.third }.take(60)
+            }
+            if (byCast.isNotEmpty()) out.add("🎭 Series starring “${text.trim()}” (${byCast.size})" to byCast)
             rows = out
             rowsView.adapter?.notifyDataSetChanged()
             status.text = if (out.isEmpty()) "Nothing found for “${text.trim()}”" else "Press ▼ to browse the results"
+            // Films and series by actor via TMDB (when a TMDB key is set in Settings).
+            if (q.length >= 3 && com.streambox.tv.data.Tmdb.enabled) {
+                val credits = com.streambox.tv.data.Tmdb.personCredits(text.trim()) ?: return@launch
+                val found = withContext(Dispatchers.Default) {
+                    val wanted = credits.titles.map { norm(it.first) to it.second }.filter { it.first.length >= 2 }
+                    val movieIdx = Repo.moviesIn(Repo.CAT_ALL).groupBy { norm(com.streambox.tv.data.Tmdb.cleanTitle(it.name).first) }
+                    val seriesIdx = Repo.seriesIn(Repo.CAT_ALL).groupBy { norm(com.streambox.tv.data.Tmdb.cleanTitle(it.name).first) }
+                    val list = LinkedHashSet<Any>()
+                    for ((t, isMovie) in wanted) {
+                        (if (isMovie) movieIdx[t] else seriesIdx[t])?.let { list.addAll(it.take(2)) }
+                        if (list.size >= 60) break
+                    }
+                    list.toList()
+                }
+                if (found.isNotEmpty()) {
+                    rows = rows + ("🎭 ${credits.name} (${found.size})" to found)
+                    rowsView.adapter?.notifyDataSetChanged()
+                    if (out.isEmpty()) status.text = "Press ▼ to browse the results"
+                }
+            }
         }
     }
 

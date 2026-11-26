@@ -179,6 +179,24 @@ object Ui {
     // ------------------------------------------------------------------ Viewers
 
     /** Runs [action] directly, or after the PIN when a Kids profile is active. */
+    /** Adds a "Watch later" toggle right after [anchor] (the My list button). [item] = "m:<id>" or "s:<id>". */
+    fun addWatchLaterButton(activity: Activity, anchor: android.widget.Button, item: String) {
+        val parent = anchor.parent as? android.view.ViewGroup ?: return
+        val b = android.widget.Button(activity, null, 0, com.streambox.tv.R.style.Btn)
+        fun label() {
+            val on = item in com.streambox.tv.data.Prefs.watchLater(com.streambox.tv.data.Repo.userKey)
+            b.text = Tr.s(if (on) "✓  Watch later" else "🕒  Watch later")
+        }
+        label()
+        b.setOnClickListener {
+            val on = item in com.streambox.tv.data.Prefs.watchLater(com.streambox.tv.data.Repo.userKey)
+            com.streambox.tv.data.Prefs.setWatchLater(com.streambox.tv.data.Repo.userKey, item, !on)
+            activity.toast(if (on) "Removed from Watch later" else "Added to Watch later")
+            label()
+        }
+        parent.addView(b, parent.indexOfChild(anchor) + 1, android.view.ViewGroup.LayoutParams(anchor.layoutParams))
+    }
+
     fun guardKids(activity: Activity, action: () -> Unit) {
         if (Repo.kidsMode) askPin(activity, action) else action()
     }

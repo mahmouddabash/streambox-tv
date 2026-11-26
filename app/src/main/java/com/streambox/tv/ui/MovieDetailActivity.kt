@@ -32,6 +32,7 @@ class MovieDetailActivity : AppCompatActivity() {
         setContentView(R.layout.activity_movie_detail)
         btnResume = findViewById(R.id.btnResume)
         btnFav = findViewById(R.id.btnFav)
+        intent.getStringExtra(EXTRA_ID)?.let { Ui.addWatchLaterButton(this, btnFav, "m:$it") }
         val meta = findViewById<TextView>(R.id.meta)
         val plot = findViewById<TextView>(R.id.plot)
 

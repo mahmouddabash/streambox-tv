@@ -50,6 +50,7 @@ class SeriesDetailActivity : AppCompatActivity() {
         show = s
         setContentView(R.layout.activity_series_detail)
         btnFav = findViewById(R.id.btnFav)
+        intent.getStringExtra(EXTRA_ID)?.let { Ui.addWatchLaterButton(this, btnFav, "s:$it") }
         status = findViewById(R.id.status)
 
         findViewById<TextView>(R.id.title).text = s.name

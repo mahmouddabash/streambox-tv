@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -219,9 +220,14 @@ object Repo {
         xmltv = null
     }
 
+    /** Fast start: use the saved lists as they are (any age); a background refresh updates them. */
+    @Volatile
+    private var quickStart = false
+
     /** Returns a fresh-enough cached file, downloading when needed. Falls back to stale data offline. */
     private fun fetch(dir: File, name: String, url: String, force: Boolean): File {
         val f = File(dir, name)
+        if (quickStart && !force && f.exists() && f.length() > 0) return f
         val maxAge = Prefs.cacheHours * 3600_000L
         val fresh = f.exists() && f.length() > 0 && System.currentTimeMillis() - f.lastModified() < maxAge
         if (fresh && !force) return f
@@ -240,10 +246,14 @@ object Repo {
 
         withContext(Dispatchers.IO) {
             val dir = cacheDir(app, p)
+            // Fast start: everything saved from last time is used straight away; sign-in and
+            // fresh lists are fetched in the background afterwards.
+            quickStart = !force && Prefs.fastStart &&
+                File(dir, if (p.isXtream) "live_streams.json" else "playlist.m3u").let { it.exists() && it.length() > 0 }
             if (p.isXtream) {
                 say("Signing in…")
-                val acc = try {
-                    authenticate(p)
+                val acc = if (quickStart) Prefs.cachedAccount(p.id) ?: AccountInfo() else try {
+                    authenticate(p).also { Prefs.saveAccount(p.id, it) }
                 } catch (e: IOException) {
                     // Allow offline start from cache, but surface real login errors.
                     if (File(dir, "live_streams.json").exists() && e.message?.contains("Wrong") != true) AccountInfo(status = "Offline")
@@ -325,6 +335,7 @@ object Repo {
                 }
 
                 publish(p, acc, lc, ch, vc, mv, sc, sr, "")
+                if (quickStart) refreshInBackground(app, p)
             } else {
                 say("Downloading playlist…")
                 val f = fetch(dir, "playlist.m3u", p.m3uUrl, force)
@@ -340,6 +351,7 @@ object Repo {
                     r.vodCats.values.toList(), r.movies,
                     emptyList(), emptyList(), r.epgUrl
                 )
+                if (quickStart) refreshInBackground(app, p)
             }
         }
     }
@@ -532,6 +544,62 @@ object Repo {
     // ------------------------------------------------------------------ Home rows
 
     /** Newest first; falls back to the end of the provider's list when no dates are given. */
+    private val bg = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * After a fast start: signs in (updating expiry / connections) and re-downloads lists older than
+     * the refresh interval. New lists are used from the next start, or straight away with Refresh.
+     */
+    private fun refreshInBackground(context: Context, p: Profile) {
+        quickStart = false
+        bg.launch {
+            kotlinx.coroutines.delay(4000) // let the first screen settle
+            try {
+                if (p.isXtream) {
+                    val acc = authenticate(p)
+                    Prefs.saveAccount(p.id, acc)
+                    if (profile?.id == p.id) account = acc
+                }
+                val dir = cacheDir(context, p)
+                val files = if (p.isXtream) listOf(
+                    "live_cats.json" to api(p, "get_live_categories"),
+                    "live_streams.json" to api(p, "get_live_streams"),
+                    "vod_cats.json" to api(p, "get_vod_categories"),
+                    "vod_streams.json" to api(p, "get_vod_streams"),
+                    "series_cats.json" to api(p, "get_series_categories"),
+                    "series.json" to api(p, "get_series")
+                ) else listOf("playlist.m3u" to p.m3uUrl)
+                for ((name, url) in files) {
+                    try {
+                        fetch(dir, name, url, force = false)
+                    } catch (_: Exception) {
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** Films added in the last 7 days (newest first). */
+    fun newThisWeek(limit: Int = 40): List<Movie> {
+        val since = System.currentTimeMillis() - 7L * 24 * 3600_000L
+        return recentlyAddedMovies(limit).filter { it.added >= since }
+    }
+
+    fun newSeriesThisWeek(limit: Int = 40): List<Series> {
+        val since = System.currentTimeMillis() - 7L * 24 * 3600_000L
+        return recentlyAddedSeries(limit).filter { it.added >= since }
+    }
+
+    /** The viewer's Watch later list as movies and series. */
+    fun watchLater(): List<Any> = Prefs.watchLater(userKey).mapNotNull {
+        when {
+            it.startsWith("m:") -> movie(it.substring(2))
+            it.startsWith("s:") -> seriesItem(it.substring(2))
+            else -> null
+        }
+    }
+
     fun recentlyAddedMovies(limit: Int = 30): List<Movie> {
         val all = moviesIn(CAT_ALL)
         return if (all.any { it.added > 0 }) all.sortedByDescending { it.added }.take(limit)

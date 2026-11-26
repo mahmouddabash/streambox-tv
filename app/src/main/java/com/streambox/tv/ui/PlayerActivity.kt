@@ -596,6 +596,20 @@ class PlayerActivity : AppCompatActivity() {
         digits.setLength(0)
         numberView.visibility = View.GONE
         if (n == null) return
+        // "Number buttons: favourites": 1 = first favourite channel, 2 = second…
+        if (Prefs.numberKeysFavourites) {
+            val favs = Repo.favouriteChannels(200)
+            val c = favs.getOrNull(n - 1)
+            if (c == null) {
+                toast(if (favs.isEmpty()) "No favourite channels yet" else "No favourite number $n")
+                return
+            }
+            rememberPrevious()
+            items = favs.map { PlayItem("", it.name, Repo.urlFor(it), true, it.id) }
+            index = n - 1
+            startItem(resume = false)
+            return
+        }
         // Prefer the current list, then all channels.
         val inList = items.indexOfFirst { Repo.channel(it.channelId)?.num == n }
         if (inList >= 0) {
@@ -1232,6 +1246,15 @@ class PlayerActivity : AppCompatActivity() {
             setOnClickListener { cycleFit() }
         }
         bar.addView(btn, 0)
+        // Small-window button (cars, phones, tablets, and TVs that support it).
+        if (packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+            val pip = android.widget.ImageButton(this, null, 0, androidx.media3.ui.R.style.ExoStyledControls_Button_Bottom).apply {
+                setImageResource(R.drawable.ic_pip)
+                contentDescription = Tr.s("Small window")
+                setOnClickListener { enterPip() }
+            }
+            bar.addView(pip, 1)
+        }
     }
 
     /** Fit → Stretch → Zoom; the choice is remembered for next time. */

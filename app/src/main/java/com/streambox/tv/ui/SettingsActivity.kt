@@ -149,6 +149,36 @@ class SettingsActivity : AppCompatActivity() {
                 Prefs.audioLanguage = opts[it].first
             }
         })
+        val subSizes = arrayOf("Small", "Normal", "Large", "Extra large")
+        val subColors = arrayOf("White", "Yellow", "Cyan")
+        val subBgs = arrayOf("Outline", "Dark box", "Shadow")
+        rows.add(Row("Subtitle style", Tr.s(subSizes[Prefs.subtitleSize.coerceIn(0, 3)]) + "   •   " +
+            Tr.s(subColors[Prefs.subtitleColor.coerceIn(0, 2)]) + "   •   " + Tr.s(subBgs[Prefs.subtitleBackground.coerceIn(0, 2)])) {
+            choose("Subtitle size", subSizes, Prefs.subtitleSize.coerceIn(0, 3)) { sz ->
+                Prefs.subtitleSize = sz
+                choose("Subtitle colour", subColors, Prefs.subtitleColor.coerceIn(0, 2)) { c ->
+                    Prefs.subtitleColor = c
+                    choose("Subtitle background", subBgs, Prefs.subtitleBackground.coerceIn(0, 2)) { b ->
+                        Prefs.subtitleBackground = b
+                        refresh()
+                    }
+                }
+            }
+        })
+        rows.add(Row("Start with the last channel", if (Prefs.startLastChannel) "On: StreamBox opens straight into the channel you watched last" else "Off: StreamBox opens on the home screen") {
+            Prefs.startLastChannel = !Prefs.startLastChannel
+            refresh()
+        })
+        rows.add(Row("Number buttons", if (Prefs.numberKeysFavourites) "Favourites: 1 = your first favourite channel, 2 = second…" else "Channel numbers from your provider") {
+            choose("Number buttons", arrayOf("Channel numbers", "My favourites (1 = first favourite)"), if (Prefs.numberKeysFavourites) 1 else 0) {
+                Prefs.numberKeysFavourites = it == 1
+                refresh()
+            }
+        })
+        rows.add(Row("Fast start", if (Prefs.fastStart) "On: opens with the saved channel list, updates it in the background" else "Off: always waits for the latest list") {
+            Prefs.fastStart = !Prefs.fastStart
+            refresh()
+        })
         rows.add(Row("Subtitles", langName(Prefs.subtitleLanguage, "Off") + "   •   switched on automatically when available") {
             val opts = listOf("" to "Off") + PlayerFactory.LANGUAGES
             choose("Subtitles", opts.map { it.second }.toTypedArray(), opts.indexOfFirst { it.first == Prefs.subtitleLanguage }.coerceAtLeast(0)) {

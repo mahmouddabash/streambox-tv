@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">StreamBox TV</string>
+    <string name="widget_description">Your favourite channels, one tap to watch</string>
 </resources>

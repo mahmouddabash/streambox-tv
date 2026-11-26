@@ -177,8 +177,22 @@ class HomeActivity : AppCompatActivity() {
 
     private fun restoreLastScreen() {
         if (askingViewer) return
+        // Tapped a channel on the home-screen widget.
+        intent.getStringExtra(EXTRA_PLAY_CHANNEL)?.let { id ->
+            intent.removeExtra(EXTRA_PLAY_CHANNEL)
+            intent.removeExtra(EXTRA_RESTORE)
+            playChannelById(id)
+            return
+        }
         if (!intent.getBooleanExtra(EXTRA_RESTORE, false)) return
         intent.removeExtra(EXTRA_RESTORE)
+        // "Start with the last channel": straight back to what was on.
+        if (Prefs.startLastChannel) {
+            Repo.recentChannelList(1).firstOrNull()?.let {
+                playChannelById(it.id)
+                return
+            }
+        }
         val target = when (Prefs.lastScreen) {
             Prefs.SCREEN_LIVE -> Intent(this, LiveActivity::class.java)
             Prefs.SCREEN_CATCHUP -> Intent(this, LiveActivity::class.java)
@@ -191,6 +205,15 @@ class HomeActivity : AppCompatActivity() {
         startActivity(target.putExtra(EXTRA_RESTORE, true))
         @Suppress("DEPRECATION")
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
+
+    /** Plays a channel, with the favourites (or its category) as the up/down zapping list. */
+    private fun playChannelById(id: String) {
+        val c = Repo.channel(id) ?: return
+        val favs = Repo.favouriteChannels(200)
+        val list = if (favs.any { it.id == id }) favs else Repo.channelsIn(c.categoryId).ifEmpty { listOf(c) }
+        val idx = list.indexOfFirst { it.id == id }.coerceAtLeast(0)
+        Ui.play(this, list.map { PlayItem("", it.name, Repo.urlFor(it), true, it.id) }, idx)
     }
 
     override fun onRestart() {
@@ -297,14 +320,23 @@ class HomeActivity : AppCompatActivity() {
         }
         Repo.recentChannelList().takeIf { it.isNotEmpty() }
             ?.let { out.add(Row("Recently watched channels", it.map(::channelCard))) }
-        Repo.recentlyAddedMovies().takeIf { it.isNotEmpty() }
-            ?.let { out.add(Row("New movies", it.map { m -> movieCard(m) })) }
-        Repo.recentlyAddedSeries().takeIf { it.isNotEmpty() }
-            ?.let { out.add(Row("New series", it.map(::seriesCard))) }
+        Repo.watchLater().takeIf { it.isNotEmpty() }?.let { list ->
+            out.add(Row("Watch later", list.map { if (it is Movie) movieCard(it) else seriesCard(it as Series) }))
+        }
+        // "New this week" when the provider added something in the last 7 days, else the newest.
+        Repo.newThisWeek().takeIf { it.isNotEmpty() }?.let { out.add(Row("New this week: movies", it.map { m -> movieCard(m) })) }
+            ?: Repo.recentlyAddedMovies().takeIf { it.isNotEmpty() }?.let { out.add(Row("New movies", it.map { m -> movieCard(m) })) }
+        Repo.newSeriesThisWeek().takeIf { it.isNotEmpty() }?.let { out.add(Row("New this week: series", it.map(::seriesCard))) }
+            ?: Repo.recentlyAddedSeries().takeIf { it.isNotEmpty() }?.let { out.add(Row("New series", it.map(::seriesCard))) }
         Repo.recentSeries().takeIf { it.isNotEmpty() }
             ?.let { out.add(Row("Your series", it.map(::seriesCard))) }
-        Repo.favouriteChannels().takeIf { it.isNotEmpty() }
-            ?.let { out.add(Row("Favourite channels", it.map(::channelCard))) }
+        Repo.favouriteChannels().takeIf { it.isNotEmpty() }?.let { favs ->
+            // With "Number buttons: favourites", show each channel's number (1 = first favourite).
+            out.add(Row("Favourite channels", favs.mapIndexed { i, c ->
+                if (Prefs.numberKeysFavourites && i < 99) Card(Kind.CHANNEL, c.id, "${i + 1} · ${c.name}", c.logo) else channelCard(c)
+            }))
+        }
+        ChannelWidget.save(this, Repo.favouriteChannels(6))
         Repo.moviesIn(Repo.CAT_FAV).take(30).takeIf { it.isNotEmpty() }
             ?.let { out.add(Row("My list", it.map { m -> movieCard(m) })) }
         if (out.none { r -> r.cards.any { it.kind == Kind.CHANNEL } }) {
@@ -538,5 +570,6 @@ class HomeActivity : AppCompatActivity() {
         /** "Who's watching?" is asked once per app start. */
         private var viewerAsked = false
         const val EXTRA_RESTORE = "restore"
+        const val EXTRA_PLAY_CHANNEL = "play_channel"
     }
 }

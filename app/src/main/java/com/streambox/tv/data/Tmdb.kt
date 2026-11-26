@@ -95,6 +95,36 @@ object Tmdb {
         }
     }
 
+    /** An actor found by name, with the titles they appear in (title, isMovie). */
+    data class Credits(val name: String, val photo: String, val titles: List<Pair<String, Boolean>>)
+
+    /** Searches TMDB for a person and returns their film and TV titles (most popular first). */
+    suspend fun personCredits(query: String): Credits? = withContext(Dispatchers.IO) {
+        if (!enabled || query.isBlank()) return@withContext null
+        try {
+            val s = "https://api.themoviedb.org/3/search/person".toHttpUrl().newBuilder()
+                .addQueryParameter("api_key", Prefs.tmdbKey).addQueryParameter("query", query).build()
+            val p = JSONObject(get(s.toString())).optJSONArray("results")?.optJSONObject(0) ?: return@withContext null
+            if (p.optString("known_for_department") != "Acting" && p.optDouble("popularity", 0.0) < 1.0) return@withContext null
+            val id = p.optString("id")
+            val c = "https://api.themoviedb.org/3/person/$id/combined_credits".toHttpUrl().newBuilder()
+                .addQueryParameter("api_key", Prefs.tmdbKey).build()
+            val cast = JSONObject(get(c.toString())).optJSONArray("cast") ?: return@withContext null
+            val out = ArrayList<Triple<String, Boolean, Double>>()
+            for (i in 0 until cast.length()) {
+                val o = cast.getJSONObject(i)
+                val movie = o.optString("media_type") == "movie"
+                val pop = o.optDouble("popularity", 0.0)
+                listOf(o.optString("title"), o.optString("name"), o.optString("original_title"), o.optString("original_name"))
+                    .filter { it.isNotBlank() }.distinct().forEach { out.add(Triple(it, movie, pop)) }
+            }
+            Credits(p.optString("name"), p.optString("profile_path").let { if (it.isBlank()) "" else IMG + "w185" + it },
+                out.sortedByDescending { it.third }.map { it.first to it.second })
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun get(url: String): String =
         Net.client.newCall(Request.Builder().url(url).build()).execute().use { r ->
             if (!r.isSuccessful) throw java.io.IOException("TMDB HTTP ${r.code}")

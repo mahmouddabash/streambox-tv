@@ -453,6 +453,55 @@ object Prefs {
         get() = sp.getInt("videoFit", 0)
         set(v) = sp.edit().putInt("videoFit", v).apply()
 
+    /** Open straight into the last channel watched when the app starts. */
+    var startLastChannel: Boolean
+        get() = sp.getBoolean("startLastChannel", false)
+        set(v) = sp.edit().putBoolean("startLastChannel", v).apply()
+
+    /** Number buttons in the player: false = channel numbers, true = favourites (1 = first favourite). */
+    var numberKeysFavourites: Boolean
+        get() = sp.getBoolean("numKeysFav", false)
+        set(v) = sp.edit().putBoolean("numKeysFav", v).apply()
+
+    /** Start from the saved channel list at once and refresh it in the background. */
+    var fastStart: Boolean
+        get() = sp.getBoolean("fastStart", true)
+        set(v) = sp.edit().putBoolean("fastStart", v).apply()
+
+    /** Last known subscription details per provider profile, shown until the background refresh. */
+    fun cachedAccount(profileId: String): AccountInfo? = try {
+        sp.getString("acc_$profileId", null)?.let {
+            val o = JSONObject(it)
+            AccountInfo(o.optString("s"), o.optLong("e"), o.optString("m"), o.optString("a"))
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    fun saveAccount(profileId: String, a: AccountInfo) {
+        sp.edit().putString("acc_$profileId", JSONObject().put("s", a.status).put("e", a.expiryMs)
+            .put("m", a.maxConnections).put("a", a.activeConnections).toString()).apply()
+    }
+
+    /** "Watch later" list per viewer: "m:<movieId>" / "s:<seriesId>", newest first. */
+    fun watchLater(userKey: String): List<String> = try {
+        val a = org.json.JSONArray(sp.getString("wl_$userKey", "[]"))
+        (0 until a.length()).map { a.getString(it) }
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    fun setWatchLater(userKey: String, item: String, on: Boolean) {
+        val l = watchLater(userKey).filterNot { it == item }
+        val n = if (on) listOf(item) + l else l
+        sp.edit().putString("wl_$userKey", org.json.JSONArray(n.take(200)).toString()).apply()
+    }
+
+    /** Favourite channels shown on the home-screen widget: "id\tname" lines. */
+    var widgetChannels: String
+        get() = sp.getString("widgetChannels", "") ?: ""
+        set(v) = sp.edit().putString("widgetChannels", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

@@ -77,6 +77,18 @@
             android:theme="@style/PlayerTheme" />
 
         <receiver android:name=".data.ReminderReceiver" android:exported="false" />
+        <!-- Home-screen widget: favourite channels (phones, tablets, car screens). -->
+        <receiver
+            android:name=".ui.ChannelWidget"
+            android:exported="false"
+            android:label="StreamBox channels">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_channels" />
+        </receiver>
         <receiver android:name=".data.RecordReceiver" android:exported="false" />
         <receiver android:name=".data.BootReceiver" android:exported="false">
             <intent-filter>

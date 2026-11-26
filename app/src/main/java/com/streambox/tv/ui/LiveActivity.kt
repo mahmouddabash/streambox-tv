@@ -46,6 +46,39 @@ class LiveActivity : AppCompatActivity() {
     private var previewId: String? = null
     private var epgJob: Job? = null
 
+    // ---------------------------------------------------------------- Now playing under each channel
+    // Fetched only for the channels on screen, a few at a time, and kept for 10 minutes by Repo.
+    private val nowTitles = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val nowAsked = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+    private val nowGate = kotlinx.coroutines.sync.Semaphore(3)
+
+    private fun withNow(c: Channel): CharSequence {
+        val now = nowTitles[c.id]
+        if (now == null) {
+            if (Repo.hasEpgSource && nowAsked.add(c.id)) lifecycleScope.launch {
+                nowGate.acquire()
+                try {
+                    val t = System.currentTimeMillis()
+                    val list = Repo.upcoming(this@LiveActivity, c)
+                    val cur = list.firstOrNull { it.startMs <= t && it.endMs > t }
+                    val next = list.firstOrNull { it.startMs > t }
+                    nowTitles[c.id] = listOfNotNull(cur?.title, next?.let { "▸ " + it.title }).joinToString("   ")
+                } finally {
+                    nowGate.release()
+                }
+                val i = chAdapter.items.indexOfFirst { it.id == c.id }
+                if (i >= 0) chAdapter.refresh(i)
+            }
+            return c.name
+        }
+        if (now.isEmpty()) return c.name
+        val s = android.text.SpannableString("${c.name}\n$now")
+        val from = c.name.length + 1
+        s.setSpan(android.text.style.RelativeSizeSpan(0.78f), from, s.length, 0)
+        s.setSpan(android.text.style.ForegroundColorSpan(0xB3FFFFFF.toInt()), from, s.length, 0)
+        return s
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (!Repo.loaded) {
@@ -87,7 +120,7 @@ class LiveActivity : AppCompatActivity() {
             R.layout.item_channel,
             bind = { v, c, _ ->
                 v.findViewById<TextView>(R.id.num).text = c.num.toString()
-                v.findViewById<TextView>(R.id.name).text = c.name
+                v.findViewById<TextView>(R.id.name).text = withNow(c)
                 v.findViewById<ImageView>(R.id.logo).loadUrl(c.logo)
                 val badge = if (c.id in favs) "★" else ""
                 v.findViewById<TextView>(R.id.badge).text = badge

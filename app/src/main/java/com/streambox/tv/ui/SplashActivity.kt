@@ -62,6 +62,7 @@ class SplashActivity : AppCompatActivity() {
                 Intent(this, HomeActivity::class.java)
                     .putExtra(HomeActivity.EXTRA_PROFILE, last.id)
                     .putExtra(HomeActivity.EXTRA_RESTORE, true)
+                    .apply { intent.getStringExtra(HomeActivity.EXTRA_PLAY_CHANNEL)?.let { putExtra(HomeActivity.EXTRA_PLAY_CHANNEL, it) } }
             ))
         } else {
             startActivity(profiles)
