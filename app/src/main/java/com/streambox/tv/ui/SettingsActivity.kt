@@ -186,6 +186,32 @@ class SettingsActivity : AppCompatActivity() {
         rows.add(Row("Network Center", "Speed test, provider and connection checks, DNS, data used, why it buffers") {
             startActivity(android.content.Intent(this, NetworkActivity::class.java))
         })
+        rows.add(Row("Film copies", if (Prefs.groupMovieCopies) "Grouped: one entry per film, its 4K / FHD / HD copies inside" else "Every copy listed separately") {
+            Prefs.groupMovieCopies = !Prefs.groupMovieCopies
+            refresh()
+        })
+        rows.add(Row("True-black background", if (Prefs.oledBlack) "On: pure black, best on OLED screens" else "Off") {
+            Prefs.oledBlack = !Prefs.oledBlack
+            recreate()
+        })
+        rows.add(Row("Light mode for slow devices", if (Prefs.lightMode) "On: no fades or picture effects" else "Off") {
+            Prefs.lightMode = !Prefs.lightMode
+            refresh()
+        })
+        val sizes = arrayOf("Small", "Normal", "Large", "Extra large")
+        rows.add(Row("Text size", sizes[Prefs.textSize.coerceIn(0, 3)]) {
+            choose("Text size", sizes, Prefs.textSize.coerceIn(0, 3)) {
+                Prefs.textSize = it
+                recreate()
+            }
+        })
+        val posters = arrayOf("Small (more per row)", "Normal", "Large")
+        rows.add(Row("Poster size", posters[Prefs.posterSize.coerceIn(0, 2)]) {
+            choose("Poster size", posters, Prefs.posterSize.coerceIn(0, 2)) {
+                Prefs.posterSize = it
+                refresh()
+            }
+        })
         rows.add(Row("Device type", if (Prefs.isTouchDevice) "Touch screen (car, phone, tablet): back arrows, swipe and tap controls" else "TV with a remote control") {
             choose("Device type", arrayOf("TV with a remote control", "Touch screen (car, phone, tablet)"), if (Prefs.isTouchDevice) 1 else 0) {
                 Prefs.deviceMode = if (it == 1) "touch" else "tv"

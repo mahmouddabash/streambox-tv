@@ -705,6 +705,45 @@ object Repo {
             .ifEmpty { listOf(c) }.sortedByDescending { qualityRank(it.name) }
     }
 
+    @Volatile private var movieGroupsFor: List<Movie>? = null
+    @Volatile private var movieGroups: Map<String, List<Movie>> = emptyMap()
+
+    /** Key shared by copies of one film ("Dune (2021) 4K", "Dune 2021 FHD" → "dune 2021"). */
+    fun movieGroup(name: String): String {
+        val (t, year) = Tmdb.cleanTitle(name)
+        return (qualityGroup(t) + " " + year).trim()
+    }
+
+    private fun groups(): Map<String, List<Movie>> {
+        if (movieGroupsFor !== movies) {
+            movieGroups = movies.groupBy { movieGroup(it.name) }
+            movieGroupsFor = movies
+        }
+        return movieGroups
+    }
+
+    /** All copies of a film the provider has (any category), best quality first. */
+    fun movieCopies(m: Movie): List<Movie> =
+        (groups()[movieGroup(m.name)] ?: listOf(m)).sortedByDescending { qualityRank(it.name) }
+
+    /** One entry per film: the copy in the preferred quality. */
+    fun collapseMovies(list: List<Movie>): List<Movie> {
+        if (!Prefs.groupMovieCopies || list.size < 2) return list
+        val cap = when (Prefs.preferredQuality) { 1 -> 3; 2 -> 2; 3 -> 1; else -> 4 }
+        val seen = HashMap<String, Movie>()
+        val order = ArrayList<String>()
+        for (m in list) {
+            val k = movieGroup(m.name)
+            val cur = seen[k]
+            if (cur == null) { seen[k] = m; order.add(k); continue }
+            val r = qualityRank(m.name)
+            val rc = qualityRank(cur.name)
+            val better = if (r <= cap && rc <= cap) r > rc else if (rc > cap) r < rc else false
+            if (better) seen[k] = m
+        }
+        return order.map { seen[it]!! }
+    }
+
     /** Watched to the end, or only the closing credits are left (the last 5 minutes past 85 %). */
     fun isFinished(pos: Long, dur: Long): Boolean =
         dur > 0 && (pos > dur * 0.95 || (dur >= 20 * 60_000L && pos >= dur * 0.85 && dur - pos <= 5 * 60_000L))

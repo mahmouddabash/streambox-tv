@@ -32,6 +32,26 @@ class MovieDetailActivity : AppCompatActivity() {
         setContentView(R.layout.activity_movie_detail)
         btnResume = findViewById(R.id.btnResume)
         btnFav = findViewById(R.id.btnFav)
+        // Other copies of this film (4K / FHD / HD…): pick which one to play.
+        m?.let { movie ->
+            val copies = Repo.movieCopies(movie)
+            if (copies.size > 1) {
+                val b = Button(this, null, 0, R.style.Btn)
+                b.text = "📀  " + Repo.qualityLabel(Repo.qualityRank(movie.name)) + "   •   " + Tr.s("{} copies").replace("{}", "${copies.size}")
+                b.setOnClickListener {
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle(Tr.s("Choose a copy"))
+                        .setItems(copies.map { (if (it.id == movie.id) "✓ " else "    ") + Repo.qualityLabel(Repo.qualityRank(it.name)) + "   •   " + it.name }.toTypedArray()) { _, w ->
+                            if (copies[w].id != movie.id) {
+                                startActivity(android.content.Intent(this, MovieDetailActivity::class.java).putExtra(EXTRA_ID, copies[w].id))
+                                finish()
+                            }
+                        }
+                        .show()
+                }
+                (btnFav.parent as? android.view.ViewGroup)?.let { p -> p.addView(b, p.indexOfChild(btnFav), android.view.ViewGroup.LayoutParams(btnFav.layoutParams)) }
+            }
+        }
         intent.getStringExtra(EXTRA_ID)?.let {
             Ui.addWatchLaterButton(this, btnFav, "m:$it")
             Ui.addHideButton(this, btnFav, "m:$it")

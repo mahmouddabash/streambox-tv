@@ -31,7 +31,7 @@ fun ImageView.loadUrl(url: String?) {
         setImageResource(R.drawable.placeholder)
     } else {
         load(url) {
-            crossfade(true)
+            crossfade(!com.streambox.tv.data.Prefs.lightMode)
             placeholder(R.drawable.placeholder)
             error(R.drawable.placeholder)
         }
@@ -189,8 +189,25 @@ object Ui {
             onOk()
             return
         }
+        // After 3 wrong tries, PIN entry pauses: 30 s, then 2 min, then 10 min.
+        val wait = Prefs.pinLockedUntil - System.currentTimeMillis()
+        if (wait > 0) {
+            activity.toast(Tr.s("Too many wrong PINs. Try again in {} s").replace("{}", "${wait / 1000 + 1}"))
+            return
+        }
         input(activity, "Enter parental PIN", "", PIN_TYPE) { entered ->
-            if (entered == Prefs.pin) onOk() else activity.toast("Wrong PIN")
+            if (entered == Prefs.pin) {
+                Prefs.pinFails = 0
+                onOk()
+            } else {
+                val fails = Prefs.pinFails + 1
+                Prefs.pinFails = fails
+                if (fails >= 3) {
+                    val lock = when { fails >= 5 -> 600_000L; fails == 4 -> 120_000L; else -> 30_000L }
+                    Prefs.pinLockedUntil = System.currentTimeMillis() + lock
+                    activity.toast(Tr.s("Too many wrong PINs. Try again in {} s").replace("{}", "${lock / 1000}"))
+                } else activity.toast("Wrong PIN")
+            }
         }
     }
 

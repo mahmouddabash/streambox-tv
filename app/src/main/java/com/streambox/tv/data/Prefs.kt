@@ -706,6 +706,40 @@ object Prefs {
         get() = sp.getLong("lastEpCheck", 0L)
         set(v) = sp.edit().putLong("lastEpCheck", v).apply()
 
+    /** Show one entry per film, with its 4K / FHD / HD copies inside. */
+    var groupMovieCopies: Boolean
+        get() = sp.getBoolean("groupMovies", true)
+        set(v) = sp.edit().putBoolean("groupMovies", v).apply()
+
+    /** True-black background (OLED screens). */
+    var oledBlack: Boolean
+        get() = sp.getBoolean("oledBlack", false)
+        set(v) = sp.edit().putBoolean("oledBlack", v).apply()
+
+    /** Light mode for slow devices: no fades or picture effects. */
+    var lightMode: Boolean
+        get() = sp.getBoolean("lightMode", false)
+        set(v) = sp.edit().putBoolean("lightMode", v).apply()
+
+    /** Text size: 0 small, 1 normal, 2 large, 3 extra large. */
+    var textSize: Int
+        get() = sp.getInt("textSize", 1)
+        set(v) = sp.edit().putInt("textSize", v).apply()
+    val textScale: Float get() = floatArrayOf(0.88f, 1f, 1.15f, 1.3f)[textSize.coerceIn(0, 3)]
+
+    /** Poster size in grids: 0 small, 1 normal, 2 large. */
+    var posterSize: Int
+        get() = sp.getInt("posterSize", 1)
+        set(v) = sp.edit().putInt("posterSize", v).apply()
+
+    /** Wrong PIN attempts in a row, and until when PIN entry is locked. */
+    var pinFails: Int
+        get() = sp.getInt("pinFails", 0)
+        set(v) = sp.edit().putInt("pinFails", v).apply()
+    var pinLockedUntil: Long
+        get() = sp.getLong("pinLocked", 0L)
+        set(v) = sp.edit().putLong("pinLocked", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

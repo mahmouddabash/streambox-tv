@@ -24,6 +24,18 @@ class App : Application(), coil.ImageLoaderFactory {
         keepContentClearOfSystemBars()
         addTouchBackArrow()
         addNightMode()
+        // True-black background for OLED screens (Settings → Look).
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {
+                if (Prefs.oledBlack) a.window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
+            }
+            override fun onActivityStarted(a: android.app.Activity) {}
+            override fun onActivityResumed(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivityStopped(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
         // The phone remote sends its keys to whichever StreamBox screen is showing.
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(a: android.app.Activity) { com.streambox.tv.data.RemoteServer.foreground = a }

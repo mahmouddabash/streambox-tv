@@ -148,13 +148,16 @@ class SearchActivity : AppCompatActivity() {
                 val n = norm(name)
                 return words.all { n.contains(it) }
             }
+            // "أفلام أكشن جديدة فوق 7" / "comedy series 2023": understood as filters, all on the device.
+            val smart = withContext(Dispatchers.Default) { smartSearch(text) }
             val result = withContext(Dispatchers.Default) {
                 val ch = Repo.channelsIn(Repo.CAT_ALL).filter { match(it.name) }.take(60)
-                val mv = Repo.moviesIn(Repo.CAT_ALL).filter { match(it.name) }.take(60)
+                val mv = Repo.collapseMovies(Repo.moviesIn(Repo.CAT_ALL).filter { match(it.name) }).take(60)
                 val sr = Repo.seriesIn(Repo.CAT_ALL).filter { match(it.name) }.take(60)
                 Triple(ch, mv, sr)
             }
             val out = ArrayList<Pair<String, List<Any>>>()
+            if (smart != null && smart.second.isNotEmpty()) out.add("✨ ${smart.first} (${smart.second.size})" to smart.second)
             if (result.first.isNotEmpty()) out.add("Channels (${result.first.size})" to result.first)
             if (result.second.isNotEmpty()) out.add("Movies (${result.second.size})" to result.second)
             if (result.third.isNotEmpty()) out.add("Series (${result.third.size})" to result.third)
@@ -216,6 +219,81 @@ class SearchActivity : AppCompatActivity() {
         Ui.play(this, listOf(PlayItem("", c.name, Repo.urlFor(c), true, c.id)), 0)
         finish()
         return true
+    }
+
+    private val genreWords = mapOf(
+        "action" to listOf("action", "أكشن", "اكشن", "حركة", "حركه"),
+        "comedy" to listOf("comedy", "comedies", "funny", "كوميدي", "كوميديا", "كوميدية", "مضحك"),
+        "drama" to listOf("drama", "دراما", "درامي"),
+        "horror" to listOf("horror", "scary", "رعب", "مرعب"),
+        "romance" to listOf("romance", "romantic", "رومانسي", "رومانسية", "رومانسيه", "حب"),
+        "thriller" to listOf("thriller", "suspense", "إثارة", "اثارة", "اثاره", "تشويق"),
+        "crime" to listOf("crime", "جريمة", "جريمه", "بوليسي"),
+        "animation" to listOf("animation", "animated", "cartoon", "anime", "كرتون", "انمي", "أنمي", "رسوم", "انيميشن"),
+        "documentary" to listOf("documentary", "وثائقي", "وثائقية"),
+        "sci-fi" to listOf("sci-fi", "scifi", "science fiction", "خيال علمي", "خيال"),
+        "adventure" to listOf("adventure", "مغامرة", "مغامرات"),
+        "family" to listOf("family", "عائلي", "عائلية"),
+        "war" to listOf("war", "حرب", "حربي"),
+        "history" to listOf("history", "historical", "تاريخي", "تاريخية"),
+        "kids" to listOf("kids", "children", "أطفال", "اطفال"),
+        "turkish" to listOf("turkish", "تركي", "تركية"),
+        "korean" to listOf("korean", "كوري", "كورية"),
+        "indian" to listOf("indian", "bollywood", "هندي", "هندية"),
+        "egyptian" to listOf("egyptian", "مصري", "مصرية"),
+        "arabic" to listOf("arabic", "arab", "عربي", "عربية")
+    )
+
+    /**
+     * Understands simple requests like "new action films above 7" / "أفلام أكشن جديدة فوق 7" /
+     * "comedy series 2023": type, genre (from category names and series genres), year, minimum
+     * rating and "new". Returns a label and the matches, or null when the text isn't such a request.
+     */
+    private fun smartSearch(raw: String): Pair<String, List<Any>>? {
+        val t = " " + raw.lowercase().replace('أ', 'ا').replace('إ', 'ا') + " "
+        val wantMovies = Regex("\\b(film|films|movie|movies)\\b|افلام|فيلم|افلم").containsMatchIn(t)
+        val wantSeries = Regex("\\b(series|show|shows|tv shows)\\b|مسلسل|مسلسلات").containsMatchIn(t)
+        // Latin words must match whole words ("war" not in "warrior"); Arabic may carry "ال" etc.
+        fun has(w: String): Boolean {
+            val x = w.lowercase().replace('أ', 'ا')
+            return if (x.first() in 'a'..'z') t.contains(" $x ") else t.contains(x)
+        }
+        val genres = genreWords.filter { (_, words) -> words.any { has(it) } }.keys
+        val fresh = Regex("\\b(new|newest|latest|recent)\\b|جديد|جديدة|جديده|احدث|حديث").containsMatchIn(t)
+        val rating = Regex("(above|over|more than|at least|فوق|اكثر من|اعلى من|من)\\s*(\\d+(?:\\.\\d)?)|(\\d+(?:\\.\\d)?)\\s*\\+|(\\d+(?:\\.\\d)?)\\s*(stars|نجوم)")
+            .find(t)?.groupValues?.drop(1)?.firstOrNull { it.toDoubleOrNull() != null }?.toDouble()?.takeIf { it in 1.0..10.0 }
+        val year = Regex("\\b(19[5-9]\\d|20[0-4]\\d)\\b").find(t)?.value
+        if (genres.isEmpty() && !fresh && rating == null && year == null) return null
+        if (!wantMovies && !wantSeries && genres.isEmpty()) return null // plain titles with a year are normal searches
+        val catNames = (Repo.vodCats + Repo.seriesCats).associate { it.id to it.name.lowercase() }
+        fun genreOk(cat: String, genreText: String): Boolean {
+            if (genres.isEmpty()) return true
+            val hay = (catNames[cat].orEmpty() + " " + genreText.lowercase()).replace('أ', 'ا')
+            return genres.any { g -> genreWords[g]!!.any { hay.contains(it.lowercase().replace('أ', 'ا')) } || hay.contains(g) }
+        }
+        fun rateOk(r: String) = rating == null || (r.toDoubleOrNull() ?: 0.0) >= rating
+        fun yearOk(name: String) = year == null || com.streambox.tv.data.Tmdb.cleanTitle(name).second == year
+        val since = System.currentTimeMillis() - 60L * 86_400_000L
+        val out = ArrayList<Any>()
+        if (wantMovies || !wantSeries) {
+            var mv = Repo.collapseMovies(Repo.moviesIn(Repo.CAT_ALL)).filter { genreOk(it.categoryId, "") && rateOk(it.rating) && yearOk(it.name) }
+            if (fresh) mv = mv.filter { it.added == 0L || it.added >= since }.sortedByDescending { it.added }
+            else mv = mv.sortedByDescending { it.rating.toDoubleOrNull() ?: 0.0 }
+            out.addAll(mv.take(if (wantSeries) 40 else 80))
+        }
+        if (wantSeries || !wantMovies) {
+            var sr = Repo.seriesIn(Repo.CAT_ALL).filter { genreOk(it.categoryId, it.genre) && rateOk(it.rating) && yearOk(it.name + " " + it.releaseDate) }
+            if (fresh) sr = sr.filter { it.added == 0L || it.added >= since }.sortedByDescending { it.added }
+            else sr = sr.sortedByDescending { it.rating.toDoubleOrNull() ?: 0.0 }
+            out.addAll(sr.take(if (wantMovies) 40 else 80))
+        }
+        val parts = ArrayList<String>()
+        if (fresh) parts.add(Tr.s("New"))
+        parts.addAll(genres.map { g -> genreWords[g]!!.first().replaceFirstChar { it.uppercase() } })
+        parts.add(Tr.s(if (wantMovies && !wantSeries) "films" else if (wantSeries && !wantMovies) "series" else "films and series"))
+        if (rating != null) parts.add("★ ${rating.toString().removeSuffix(".0")}+")
+        if (year != null) parts.add(year)
+        return parts.joinToString(" ") to out
     }
 
     /**

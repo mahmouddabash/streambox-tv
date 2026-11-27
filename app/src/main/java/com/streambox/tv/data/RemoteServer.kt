@@ -34,7 +34,10 @@ object RemoteServer {
         url?.let { return it }
         val ip = PairingServer.localIp() ?: return null
         val app = context.applicationContext
-        token = (1000..9999).random().toString()
+        // A random 10-character code in the address: only someone who scanned the QR code can use it.
+        val chars = "abcdefghijkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789"
+        val rnd = java.security.SecureRandom()
+        token = (1..10).map { chars[rnd.nextInt(chars.length)] }.joinToString("")
         val s = try {
             ServerSocket(8686)
         } catch (_: Exception) {

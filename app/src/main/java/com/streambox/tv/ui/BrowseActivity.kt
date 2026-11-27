@@ -114,7 +114,7 @@ class BrowseActivity : AppCompatActivity() {
             }
         )
         val grid = findViewById<RecyclerView>(R.id.grid)
-        grid.layoutManager = GridLayoutManager(this, 5)
+        grid.layoutManager = GridLayoutManager(this, when (com.streambox.tv.data.Prefs.posterSize) { 0 -> 7; 2 -> 4; else -> 5 })
         grid.itemAnimator = null
         grid.adapter = gridAdapter
 
@@ -164,7 +164,7 @@ class BrowseActivity : AppCompatActivity() {
         Prefs.setLastCategory(Repo.profileId, section, id)
         favs = Prefs.favourites(Repo.userKey, favType)
         cards = if (section == Repo.SECTION_VOD) {
-            Repo.moviesIn(id).map { Card(it.id, it.name, it.poster, it.rating, it.added) }
+            Repo.collapseMovies(Repo.moviesIn(id)).map { Card(it.id, it.name, it.poster, it.rating, it.added) }
         } else {
             Repo.seriesIn(id).map { Card(it.id, it.name, it.poster, it.rating, it.added) }
         }

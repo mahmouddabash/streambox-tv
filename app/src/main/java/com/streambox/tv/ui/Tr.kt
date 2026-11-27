@@ -408,6 +408,21 @@ object Tr {
         "Stereo sound" to "صوت ستيريو",
         "Video fit" to "ملاءمة الفيديو",
         "Watch later" to "للمشاهدة لاحقًا",
+        "Choose a copy" to "اختر نسخة",
+        "Film copies" to "نسخ الأفلام",
+        "True-black background" to "خلفية سوداء بالكامل",
+        "Light mode for slow devices" to "وضع خفيف للأجهزة البطيئة",
+        "Text size" to "حجم النص",
+        "Poster size" to "حجم الملصقات",
+        "Small" to "صغير",
+        "Normal" to "عادي",
+        "Large" to "كبير",
+        "Extra large" to "كبير جدًا",
+        "Small (more per row)" to "صغير (أكثر في الصف)",
+        "New" to "جديد",
+        "films" to "أفلام",
+        "series" to "مسلسلات",
+        "films and series" to "أفلام ومسلسلات",
         "New episodes" to "حلقات جديدة",
         "Just this once" to "مرة واحدة فقط",
         "Every day at this time" to "يوميًا في هذا الوقت",
@@ -631,6 +646,8 @@ object Tr {
     )
 
     private val templates: List<Pair<String, String>> = listOf(
+        "{} copies" to "{} نسخ",
+        "Too many wrong PINs. Try again in {} s" to "محاولات خاطئة كثيرة. حاول بعد {} ث",
         "about {} h of HD left" to "يتبقى حوالي {} ساعة بجودة HD",
         "This quality isn't working. Trying {}…" to "هذه الجودة لا تعمل. جارٍ تجربة {}…",
         "🎲  Surprise: {}" to "🎲  مفاجأة: {}",
@@ -822,14 +839,32 @@ class TrViewInflater : AppCompatViewInflater() {
 }
 
 class TrTextView(c: Context, a: AttributeSet?) : AppCompatTextView(c, a) {
+    init {
+        // Settings → Text size
+        val k = com.streambox.tv.data.Prefs.textScale
+        if (k != 1f) setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, textSize * k)
+    }
+
     override fun setText(text: CharSequence?, type: BufferType?) = super.setText(Tr.t(text), type)
 }
 
 class TrButton(c: Context, a: AttributeSet?) : AppCompatButton(c, a) {
+    init {
+        // Settings → Text size
+        val k = com.streambox.tv.data.Prefs.textScale
+        if (k != 1f) setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, textSize * k)
+    }
+
     override fun setText(text: CharSequence?, type: BufferType?) = super.setText(Tr.t(text), type)
 }
 
 class TrCheckedTextView(c: Context, a: AttributeSet?) : AppCompatCheckedTextView(c, a) {
+    init {
+        // Settings → Text size
+        val k = com.streambox.tv.data.Prefs.textScale
+        if (k != 1f) setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, textSize * k)
+    }
+
     override fun setText(text: CharSequence?, type: BufferType?) = super.setText(Tr.t(text), type)
 }
 

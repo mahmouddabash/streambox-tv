@@ -188,7 +188,8 @@ object PlayerFactory {
     /** Effects for the chosen picture mode (empty = untouched, zero overhead). */
     fun effects(): List<androidx.media3.common.Effect> {
         val mode = PictureMode.of(Prefs.pictureMode)
-        return if (mode == PictureMode.OFF) emptyList() else listOf(PictureEffect(mode))
+        // Light mode (slow devices): never run the picture filter.
+        return if (mode == PictureMode.OFF || Prefs.lightMode) emptyList() else listOf(PictureEffect(mode))
     }
 
     /** [mimeType] forces the format (used when probing found the server sends something else). */
