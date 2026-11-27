@@ -157,7 +157,13 @@ class HomeActivity : AppCompatActivity() {
             rec to "⏺  Recordings",
             refresh to "⟳  Refresh content"
         )
-        tucked.forEach { it.first.visibility = View.GONE }
+        // Touch screens (car units, tablets) show every icon, there's no remote to dig through a menu;
+        // only very narrow screens (phones) keep them behind "⋯".
+        if (Prefs.isTouchDevice && resources.configuration.screenWidthDp >= 700) {
+            findViewById<Button>(R.id.tileMore).visibility = View.GONE
+        } else {
+            tucked.forEach { it.first.visibility = View.GONE }
+        }
         findViewById<Button>(R.id.tileMore).setOnClickListener {
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setItems(tucked.map { Tr.s(it.second) }.toTypedArray()) { _, w -> tucked[w].first.performClick() }
