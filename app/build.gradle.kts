@@ -96,6 +96,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
     implementation("io.coil-kt:coil:2.7.0")
     implementation("com.google.zxing:core:3.5.3")
+    // Free VPN (WireGuard tunnel to Cloudflare WARP, this app only)
+    implementation("com.wireguard.android:tunnel:1.0.20230706")
 
     testImplementation("junit:junit:4.13.2")
 }

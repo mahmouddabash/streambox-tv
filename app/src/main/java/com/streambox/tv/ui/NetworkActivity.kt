@@ -30,6 +30,36 @@ class NetworkActivity : AppCompatActivity() {
 
     private data class Row(val title: String, val value: String, val action: (() -> Unit)? = null)
 
+    private val vpnPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) {
+        if (com.streambox.tv.data.FreeVpn.permissionIntent(this) == null) startVpn() else toast("The VPN wasn't allowed")
+    }
+
+    private fun toggleVpn() {
+        if (Prefs.vpnOn) {
+            Prefs.vpnOn = false
+            lifecycleScope.launch(Dispatchers.IO) { com.streambox.tv.data.FreeVpn.stop(this@NetworkActivity) }
+            toast("Free VPN off")
+            refresh()
+            return
+        }
+        val ask = com.streambox.tv.data.FreeVpn.permissionIntent(this)
+        if (ask != null) {
+            try { vpnPermission.launch(ask) } catch (_: Exception) { toast("This TV doesn't allow VPN apps") }
+        } else startVpn()
+    }
+
+    private fun startVpn() {
+        toast("Connecting the free VPN…")
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) { com.streambox.tv.data.FreeVpn.start(this@NetworkActivity) }
+            Prefs.vpnOn = ok
+            toast(if (ok) Tr.s("Free VPN on: StreamBox now goes through Cloudflare") else
+                Tr.s("Free VPN failed") + ": " + com.streambox.tv.data.FreeVpn.lastError)
+            refresh()
+            if (ok) quickChecks()
+        }
+    }
+
     private lateinit var adapter: SimpleAdapter<Row>
     private var internet = "Checking…"
     private var provider = "Checking…"
@@ -109,6 +139,19 @@ class NetworkActivity : AppCompatActivity() {
                 if (max in 1..used) "   •   ⚠ " + Tr.s("limit reached: another device is watching") else ""))
         }
         rows.add(Row("Speed test", speed) { speedTest() })
+        val vpn = com.streambox.tv.data.FreeVpn
+        rows.add(Row("Free VPN (Cloudflare WARP)", when {
+            Prefs.vpnOn && vpn.isUp -> Tr.s("On   •   only StreamBox goes through it   •   OK = turn off")
+            Prefs.vpnOn -> Tr.s("Connecting…   •   OK = turn off")
+            else -> Tr.s("Off   •   use it when your provider blocks your home internet (HTTP 403)")
+        }) { toggleVpn() })
+        if (Prefs.vpnOn) rows.add(Row("Free VPN entry point", Tr.s("OK = try another Cloudflare entry point (if it's slow)")) {
+            lifecycleScope.launch {
+                val ok = withContext(Dispatchers.IO) { vpn.nextEndpoint(this@NetworkActivity) }
+                toast(if (ok) "Switched" else Tr.s("Free VPN failed") + ": " + vpn.lastError)
+                refresh(); quickChecks()
+            }
+        })
         rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, Net.dnsChoices.size - 1)] + "   •   " + dns) { chooseDns() })
         rows.add(Row("Find the fastest DNS", Tr.s("Logs in to your provider through every DNS, fastest first")) { fastestDns() })
         rows.add(Row("DNS servers", dnsServers))
@@ -302,8 +345,9 @@ class NetworkActivity : AppCompatActivity() {
             if (refused) {
                 AlertDialog.Builder(this@NetworkActivity)
                     .setTitle(Tr.s("Your provider is refusing this internet connection"))
-                    .setMessage(Tr.s("Every DNS found your provider, but the provider answered \"forbidden\" (403). This isn't a DNS problem: the provider is blocking the internet address of this connection (your home internet). It usually works on mobile data / a phone hotspot because that's a different address.\n\nWhat helps:\n•  Restart your router (you usually get a new internet address).\n•  If it still fails, ask your provider to unblock your connection, or use a VPN on the TV.\n•  Too many devices or logins at once can cause a temporary block: close the app on other devices and wait 30–60 minutes."))
+                    .setMessage(Tr.s("Every DNS found your provider, but the provider answered \"forbidden\" (403). This isn't a DNS problem: the provider is blocking the internet address of this connection (your home internet). It usually works on mobile data / a phone hotspot because that's a different address.\n\nWhat helps:\n•  Restart your router (you usually get a new internet address).\n•  If it still fails, ask your provider to unblock your connection, or use a VPN (Network Center → Free VPN).\n•  Too many devices or logins at once can cause a temporary block: close the app on other devices and wait 30–60 minutes."))
                     .setPositiveButton(Tr.s("Show the results"), null)
+                    .setNeutralButton(Tr.s("Turn on free VPN")) { _, _ -> if (!Prefs.vpnOn) toggleVpn() }
                     .show()
             }
             AlertDialog.Builder(this@NetworkActivity)

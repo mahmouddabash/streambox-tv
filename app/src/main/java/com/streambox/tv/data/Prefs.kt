@@ -664,6 +664,26 @@ object Prefs {
         set(v) = sp.edit().putInt("sortMode", v).apply()
 
     /** DNS choice: index into [Net.dnsChoices] (0 = automatic). */
+    // ---------- Free VPN (Cloudflare WARP, StreamBox traffic only) ----------
+    var vpnOn: Boolean
+        get() = sp.getBoolean("vpnOn", false)
+        set(v) = sp.edit().putBoolean("vpnOn", v).apply()
+    var vpnPrivateKey: String
+        get() = sp.getString("vpnKey", "") ?: ""
+        set(v) = sp.edit().putString("vpnKey", v).apply()
+    var vpnAddress4: String
+        get() = sp.getString("vpnA4", "") ?: ""
+        set(v) = sp.edit().putString("vpnA4", v).apply()
+    var vpnAddress6: String
+        get() = sp.getString("vpnA6", "") ?: ""
+        set(v) = sp.edit().putString("vpnA6", v).apply()
+    var vpnPeerKey: String
+        get() = sp.getString("vpnPeer", "") ?: ""
+        set(v) = sp.edit().putString("vpnPeer", v).apply()
+    var vpnEndpoint: Int
+        get() = sp.getInt("vpnEp", 0)
+        set(v) = sp.edit().putInt("vpnEp", v).apply()
+
     /** Winner of the automatic provider test ("Best for my provider"); 0 = not tested yet. */
     var bestDns: Int
         get() = sp.getInt("bestDns", 0)
