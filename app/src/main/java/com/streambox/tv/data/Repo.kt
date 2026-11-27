@@ -378,6 +378,15 @@ object Repo {
         movieInfoCache.clear()
         serverOffsetMs = null
         loaded = true
+        // Prepare film/channel grouping in the background so the first screens open without delay.
+        bg.launch {
+            try {
+                mv.forEach { movieGroup(it.name); qualityRank(it.name) }
+                groups()
+                ch.firstOrNull()?.let { variantsOf(it) }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     // ------------------------------------------------------------------ Channel manager
@@ -633,16 +642,30 @@ object Repo {
         }
     }
 
+    // The newest titles are sorted once per catalogue / viewer, not on every visit to Home.
+    @Volatile private var newestMoviesKey: Any? = null
+    @Volatile private var newestMovies: List<Movie> = emptyList()
+    @Volatile private var newestSeriesKey: Any? = null
+    @Volatile private var newestSeries: List<Series> = emptyList()
+
     fun recentlyAddedMovies(limit: Int = 30): List<Movie> {
-        val all = moviesIn(CAT_ALL)
-        return if (all.any { it.added > 0 }) all.sortedByDescending { it.added }.take(limit)
-        else all.takeLast(limit).reversed()
+        val key = Triple(System.identityHashCode(movies), userKey, Prefs.hidden(userKey).size)
+        if (newestMoviesKey != key) {
+            val all = moviesIn(CAT_ALL)
+            newestMovies = if (all.any { it.added > 0 }) all.sortedByDescending { it.added }.take(200) else all.takeLast(200).reversed()
+            newestMoviesKey = key
+        }
+        return newestMovies.take(limit)
     }
 
     fun recentlyAddedSeries(limit: Int = 30): List<Series> {
-        val all = seriesIn(CAT_ALL)
-        return if (all.any { it.added > 0 }) all.sortedByDescending { it.added }.take(limit)
-        else all.takeLast(limit).reversed()
+        val key = Triple(System.identityHashCode(series), userKey, Prefs.hidden(userKey).size)
+        if (newestSeriesKey != key) {
+            val all = seriesIn(CAT_ALL)
+            newestSeries = if (all.any { it.added > 0 }) all.sortedByDescending { it.added }.take(200) else all.takeLast(200).reversed()
+            newestSeriesKey = key
+        }
+        return newestSeries.take(limit)
     }
 
     /** Movies with a saved resume position, most recently watched first. */
@@ -658,8 +681,15 @@ object Repo {
         "(?i)(\\b(4k|uhd|2160p?|fhd|1080[pi]?|hd|720p?|sd|576p?|480p?|hevc|h\\.?26[45]|x26[45]|50fps|60fps|hq|lq|raw|backup|multi)\\b|ᵁᴴᴰ|ᶠᴴᴰ|ᴴᴰ|ˢᴰ|⁴ᴷ|[◉●★✪♛™®]|\\(\\s*\\)|\\[\\s*\\])"
     )
 
+    // Results of the name analysis are remembered: computing them while scrolling made lists lag.
+    private val rankMemo = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val groupMemo = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val movieGroupMemo = java.util.concurrent.ConcurrentHashMap<String, String>()
+
     /** 4 = 4K, 3 = Full HD, 2 = HD (or unknown), 1 = SD. */
-    fun qualityRank(name: String): Int {
+    fun qualityRank(name: String): Int = rankMemo.getOrPut(name) { computeRank(name) }
+
+    private fun computeRank(name: String): Int {
         val n = name.lowercase()
         return when {
             Regex("\\b(4k|uhd|2160p?)\\b").containsMatchIn(n) || "ᵁᴴᴰ" in name || "⁴ᴷ" in name -> 4
@@ -672,7 +702,9 @@ object Repo {
     fun qualityLabel(rank: Int) = when (rank) { 4 -> "4K"; 3 -> "FHD"; 1 -> "SD"; else -> "HD" }
 
     /** Same channel in different qualities share this key ("MBC 1 FHD", "MBC 1 HD" → "mbc 1"). */
-    fun qualityGroup(name: String): String =
+    fun qualityGroup(name: String): String = groupMemo.getOrPut(name) { computeGroup(name) }
+
+    private fun computeGroup(name: String): String =
         qualityTokens.replace(name.lowercase(), " ").replace(Regex("[|:_\\-]+\\s*$"), " ").replace(Regex("\\s+"), " ").trim()
 
     /** One channel per group: the hand-picked quality, else the best one allowed by the preference. */
@@ -697,21 +729,29 @@ object Repo {
         return out
     }
 
-    /** Every quality of [c] in the catalogue, best first. */
+    @Volatile private var variantIndexFor: List<Channel>? = null
+    @Volatile private var variantIndex: Map<String, List<Channel>> = emptyMap()
+
+    /** Every quality of [c] in the catalogue, best first (looked up in an index, not by scanning). */
     fun variantsOf(c: Channel): List<Channel> {
         val key = qualityGroup(c.name)
         if (key.isEmpty()) return listOf(c)
-        return channels.filter { it.categoryId == c.categoryId && qualityGroup(it.name) == key }
-            .ifEmpty { listOf(c) }.sortedByDescending { qualityRank(it.name) }
+        val list = channels
+        if (variantIndexFor !== list) {
+            variantIndex = list.groupBy { it.categoryId + "\u0000" + qualityGroup(it.name) }
+                .mapValues { (_, v) -> v.sortedByDescending { qualityRank(it.name) } }
+            variantIndexFor = list
+        }
+        return variantIndex[c.categoryId + "\u0000" + key] ?: listOf(c)
     }
 
     @Volatile private var movieGroupsFor: List<Movie>? = null
     @Volatile private var movieGroups: Map<String, List<Movie>> = emptyMap()
 
     /** Key shared by copies of one film ("Dune (2021) 4K", "Dune 2021 FHD" → "dune 2021"). */
-    fun movieGroup(name: String): String {
+    fun movieGroup(name: String): String = movieGroupMemo.getOrPut(name) {
         val (t, year) = Tmdb.cleanTitle(name)
-        return (qualityGroup(t) + " " + year).trim()
+        (qualityGroup(t) + " " + year).trim()
     }
 
     private fun groups(): Map<String, List<Movie>> {

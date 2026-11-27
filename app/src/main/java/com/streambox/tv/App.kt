@@ -40,6 +40,7 @@ class App : Application(), coil.ImageLoaderFactory {
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(a: android.app.Activity) { com.streambox.tv.data.RemoteServer.foreground = a }
             override fun onActivityPaused(a: android.app.Activity) {
+                Prefs.flushCounters()
                 if (com.streambox.tv.data.RemoteServer.foreground === a) com.streambox.tv.data.RemoteServer.foreground = null
             }
             override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}

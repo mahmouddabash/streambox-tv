@@ -576,7 +576,58 @@ object Prefs {
         set(v) = sp.edit().putInt("nightMode", v).apply()
 
     /** Viewing time per viewer: total, live, movies, series (ms) and per-channel minutes. */
+    // Counters that change every few seconds (viewing time, data used) are kept in memory and saved
+    // at most every 30 s and when a screen closes: rewriting the settings file each time made TVs stutter.
+    private val pendingLongs = HashMap<String, Long>()
+    private val pendingStats = HashMap<String, Long>()
+    private var lastFlush = 0L
+
+    @Synchronized
+    private fun bump(key: String, delta: Long) {
+        pendingLongs[key] = (pendingLongs[key] ?: 0L) + delta
+        if (System.currentTimeMillis() - lastFlush > 30_000L) flushCounters()
+    }
+
+    @Synchronized
+    private fun readLong(key: String): Long = sp.getLong(key, 0L) + (pendingLongs[key] ?: 0L)
+
+    /** Saves the counters kept in memory (called every 30 s and when a screen is left). */
+    @Synchronized
+    fun flushCounters() {
+        lastFlush = System.currentTimeMillis()
+        if (pendingLongs.isEmpty() && pendingStats.isEmpty()) return
+        val e = sp.edit()
+        for ((k, v) in pendingLongs) e.putLong(k, sp.getLong(k, 0L) + v)
+        pendingLongs.clear()
+        pendingStats.entries.groupBy { it.key.substringBefore('|') }.forEach { (user, list) ->
+            val o = try { JSONObject(sp.getString("stats_$user", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+            for ((k, ms) in list) {
+                val parts = k.split('|')
+                val kind = parts.getOrElse(1) { "" }
+                val ch = parts.getOrElse(2) { "" }
+                o.put("total", o.optLong("total") + ms)
+                o.put(kind, o.optLong(kind) + ms)
+                if (ch.isNotEmpty()) {
+                    val c = o.optJSONObject("ch") ?: JSONObject()
+                    c.put(ch, c.optLong(ch) + ms)
+                    o.put("ch", c)
+                }
+            }
+            if (!o.has("since")) o.put("since", System.currentTimeMillis())
+            e.putString("stats_$user", o.toString())
+        }
+        pendingStats.clear()
+        e.apply()
+    }
+
+    @Synchronized
     fun addWatchTime(userKey: String, kind: String, channelId: String, ms: Long) {
+        val k = "$userKey|$kind|$channelId"
+        pendingStats[k] = (pendingStats[k] ?: 0L) + ms
+        if (System.currentTimeMillis() - lastFlush > 30_000L) flushCounters()
+    }
+
+    private fun addWatchTimeNow(userKey: String, kind: String, channelId: String, ms: Long) {
         val o = try { JSONObject(sp.getString("stats_$userKey", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
         o.put("total", o.optLong("total") + ms)
         o.put(kind, o.optLong(kind) + ms)
@@ -589,8 +640,9 @@ object Prefs {
         sp.edit().putString("stats_$userKey", o.toString()).apply()
     }
 
-    fun watchStats(userKey: String): JSONObject =
+    fun watchStats(userKey: String): JSONObject = flushCounters().let {
         try { JSONObject(sp.getString("stats_$userKey", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+    }
 
     /** Sort order in the Movies / Series grids. */
     var sortMode: Int
@@ -607,13 +659,13 @@ object Prefs {
     /** Data used by StreamBox this month, split into Wi-Fi / Ethernet and mobile data / hotspot. */
     fun addDataUsed(bytes: Long, mobile: Boolean) {
         if (bytes <= 0) return
-        val k = "data_${monthKey()}_" + if (mobile) "m" else "w"
-        sp.edit().putLong(k, sp.getLong(k, 0L) + bytes).apply()
+        bump("data_${monthKey()}_" + if (mobile) "m" else "w", bytes)
     }
 
-    fun dataUsed(mobile: Boolean): Long = sp.getLong("data_${monthKey()}_" + if (mobile) "m" else "w", 0L)
+    fun dataUsed(mobile: Boolean): Long = readLong("data_${monthKey()}_" + if (mobile) "m" else "w")
 
     fun resetDataUsed() {
+        synchronized(this) { pendingLongs.keys.removeAll { it.startsWith("data_") } }
         sp.edit().remove("data_${monthKey()}_m").remove("data_${monthKey()}_w").apply()
     }
 
@@ -641,11 +693,8 @@ object Prefs {
     fun setKidsBedtime(viewerId: String, hour: Int) = sp.edit().putInt("kidBed_$viewerId", hour).apply()
 
     private fun dayKey() = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
-    fun kidsUsedMs(viewerId: String): Long = sp.getLong("kidUse_${viewerId}_${dayKey()}", 0L)
-    fun addKidsUsed(viewerId: String, ms: Long) {
-        val k = "kidUse_${viewerId}_${dayKey()}"
-        sp.edit().putLong(k, sp.getLong(k, 0L) + ms).apply()
-    }
+    fun kidsUsedMs(viewerId: String): Long = readLong("kidUse_${viewerId}_${dayKey()}")
+    fun addKidsUsed(viewerId: String, ms: Long) = bump("kidUse_${viewerId}_${dayKey()}", ms)
 
     /** After a parent enters the PIN, watching may continue until this time. */
     var kidsUnlockedUntil: Long
