@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 class AddProfileActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private var xtream = true
     private lateinit var status: TextView

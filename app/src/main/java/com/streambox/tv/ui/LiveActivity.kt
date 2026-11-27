@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 
 /** Live TV: categories | channels | preview + guide. */
 class LiveActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var catAdapter: SimpleAdapter<Category>
     private lateinit var chAdapter: SimpleAdapter<Channel>

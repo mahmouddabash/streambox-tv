@@ -36,6 +36,8 @@ import java.text.Normalizer
 
 /** One search box for channels, movies and series, with voice input from the remote's mic. */
 class SearchActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var query: EditText
     private lateinit var status: TextView

@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 
 /** Full guide of one channel: watch what's on now, set reminders or record upcoming programmes. */
 class EpgActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var channel: Channel
     private lateinit var adapter: SimpleAdapter<Programme>

@@ -15,6 +15,8 @@ import com.streambox.tv.data.Prefs
 import com.streambox.tv.data.Repo
 
 class SettingsActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private class Row(val title: String, val value: String, val action: () -> Unit)
 
@@ -86,7 +88,7 @@ class SettingsActivity : AppCompatActivity() {
             "Download speed limit", "Download location"),
         "Family" to setOf("Viewers", "Parental control", "Viewing stats"),
         "Network" to setOf("Network Center", "Picture quality and data", "Player identity (User-Agent)", "Phone remote", "Fast start"),
-        "Look" to setOf("Language", "Theme colour", "True-black background", "Light mode for slow devices", "Text size", "Poster size",
+        "Look" to setOf("Language", "Theme colour", "True-black background", "Light mode for slow devices", "Text size", "Screen zoom", "Poster size",
             "Night mode", "Device type"),
         "App" to emptySet()
     )
@@ -264,6 +266,16 @@ class SettingsActivity : AppCompatActivity() {
             choose("Text size", sizes, Prefs.textSize.coerceIn(0, 3)) {
                 Prefs.textSize = it
                 recreate()
+            }
+        })
+        val zooms = arrayOf("100 % (normal)", "90 %", "85 % (compact)", "80 %", "75 % (most compact)")
+        val zNow = Prefs.zoomFactor.let { f -> floatArrayOf(1f, 0.9f, 0.85f, 0.8f, 0.75f).indexOfFirst { kotlin.math.abs(it - f) < 0.01f } }.coerceAtLeast(0)
+        rows.add(Row("Screen zoom", zooms[zNow] + "   •   " + Tr.s("smaller = more fits on the screen")) {
+            choose("Screen zoom", zooms, zNow) {
+                Prefs.screenZoom = it
+                // Every open screen has to be redrawn at the new size: start again from Home.
+                startActivity(android.content.Intent(this, SplashActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
             }
         })
         val posters = arrayOf("Small (more per row)", "Normal", "Large")

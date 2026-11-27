@@ -16,6 +16,8 @@ import com.streambox.tv.data.Viewer
 
 /** Full-screen "Who's watching?" with avatar tiles; hold OK on a tile to edit it. */
 class ViewersActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var tiles: LinearLayout
 

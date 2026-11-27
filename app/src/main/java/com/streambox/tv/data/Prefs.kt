@@ -799,6 +799,16 @@ object Prefs {
     var textSize: Int
         get() = sp.getInt("textSize", 1)
         set(v) = sp.edit().putInt("textSize", v).apply()
+    /** Screen zoom: 0 = 100 %, 1 = 90 %, 2 = 85 %, 3 = 80 %, 4 = 75 %. -1 = not chosen (TV 85 %, touch 100 %). */
+    var screenZoom: Int
+        get() = sp.getInt("screenZoom", -1)
+        set(v) = sp.edit().putInt("screenZoom", v).apply()
+
+    val zoomFactor: Float get() {
+        val z = screenZoom.let { if (it < 0) (if (isTouchDevice) 0 else 2) else it }
+        return floatArrayOf(1f, 0.9f, 0.85f, 0.8f, 0.75f)[z.coerceIn(0, 4)]
+    }
+
     val textScale: Float get() = floatArrayOf(0.88f, 1f, 1.15f, 1.3f)[textSize.coerceIn(0, 3)]
 
     /** Poster size in grids: 0 small, 1 normal, 2 large. */

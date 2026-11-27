@@ -15,6 +15,8 @@ import com.streambox.tv.data.Repo
 import kotlinx.coroutines.launch
 
 class MovieDetailActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var movie: Movie
     private lateinit var btnResume: Button

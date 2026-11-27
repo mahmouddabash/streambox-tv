@@ -18,6 +18,8 @@ import com.streambox.tv.data.Series
 import kotlinx.coroutines.launch
 
 class SeriesDetailActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var show: Series
     private lateinit var btnFav: Button

@@ -19,6 +19,8 @@ import com.streambox.tv.data.Repo
 
 /** Poster grid for Movies and Series. */
 class BrowseActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     /** Common shape for a movie or a series in the grid. */
     private data class Card(val id: String, val name: String, val poster: String, val rating: String, val added: Long = 0L) {

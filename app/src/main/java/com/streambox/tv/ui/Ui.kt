@@ -22,6 +22,23 @@ import java.util.Locale
 
 fun Context.toast(msg: String) = Toast.makeText(this, Tr.s(msg), Toast.LENGTH_SHORT).show()
 
+/**
+ * Context with the chosen screen zoom: a lower density draws everything smaller, so more fits on
+ * screen (Settings → Look → Screen zoom). Used by every screen in attachBaseContext.
+ */
+fun zoomed(base: android.content.Context): android.content.Context {
+    val f = try { com.streambox.tv.data.Prefs.zoomFactor } catch (_: Throwable) { 1f }
+    if (f >= 0.999f) return base
+    val cur = base.resources.configuration
+    val c = android.content.res.Configuration(cur)
+    c.densityDpi = (cur.densityDpi * f).toInt().coerceAtLeast(120)
+    val k = cur.densityDpi.toFloat() / c.densityDpi
+    c.screenWidthDp = (cur.screenWidthDp * k).toInt()
+    c.screenHeightDp = (cur.screenHeightDp * k).toInt()
+    c.smallestScreenWidthDp = (cur.smallestScreenWidthDp * k).toInt()
+    return base.createConfigurationContext(c)
+}
+
 fun ImageView.loadUrl(url: String?, onFail: (() -> Unit)? = null) {
     if (background != null && !clipToOutline) {
         outlineProvider = android.view.ViewOutlineProvider.BACKGROUND

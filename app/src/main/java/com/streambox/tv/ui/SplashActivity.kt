@@ -15,6 +15,8 @@ import com.streambox.tv.data.Prefs
 
 /** Short animated brand intro, then the profile picker (which opens the last profile on its own). */
 class SplashActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private val handler = Handler(Looper.getMainLooper())
     private var done = false

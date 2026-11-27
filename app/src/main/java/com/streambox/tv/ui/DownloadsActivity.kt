@@ -17,6 +17,8 @@ import java.io.File
 
 /** Movies and episodes saved for offline viewing. */
 class DownloadsActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var adapter: SimpleAdapter<Downloads.Item>
     private lateinit var status: TextView

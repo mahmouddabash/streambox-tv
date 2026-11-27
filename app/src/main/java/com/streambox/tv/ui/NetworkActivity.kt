@@ -25,6 +25,8 @@ import java.util.Locale
  * Nothing here contacts anything except your provider (and Google's connectivity check).
  */
 class NetworkActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private data class Row(val title: String, val value: String, val action: (() -> Unit)? = null)
 

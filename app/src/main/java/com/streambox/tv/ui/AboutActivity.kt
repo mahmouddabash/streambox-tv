@@ -20,6 +20,8 @@ import okhttp3.Request
 
 /** Version, device, connection and account status, problem reports, licences and privacy. */
 class AboutActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private data class Row(val title: String, val value: String, val action: (() -> Unit)? = null)
 

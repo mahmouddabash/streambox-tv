@@ -49,6 +49,8 @@ import kotlinx.coroutines.launch
  */
 @OptIn(markerClass = [UnstableApi::class])
 class PlayerActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var playerView: PlayerView
     private lateinit var overlay: View

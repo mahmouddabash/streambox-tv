@@ -16,6 +16,8 @@ import java.io.File
 
 /** Scheduled, running and finished recordings. */
 class RecordingsActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var adapter: SimpleAdapter<Recorder.Recording>
     private lateinit var status: TextView

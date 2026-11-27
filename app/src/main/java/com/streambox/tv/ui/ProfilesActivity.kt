@@ -15,6 +15,8 @@ import com.streambox.tv.data.Prefs
 import com.streambox.tv.data.Repo
 
 class ProfilesActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var adapter: SimpleAdapter<Profile>
 

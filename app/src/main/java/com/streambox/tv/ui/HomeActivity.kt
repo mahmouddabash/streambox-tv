@@ -35,6 +35,8 @@ import java.text.NumberFormat
  * a top navigation bar and horizontal rows (continue watching, recently added, channels…).
  */
 class HomeActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private lateinit var profile: Profile
     private lateinit var status: TextView

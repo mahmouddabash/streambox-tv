@@ -30,6 +30,8 @@ import com.streambox.tv.data.Repo
  */
 @OptIn(markerClass = [UnstableApi::class])
 class MultiViewActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
+
 
     private class Tile(val frame: FrameLayout, val view: PlayerView, val label: TextView) {
         var channel: Channel? = null
