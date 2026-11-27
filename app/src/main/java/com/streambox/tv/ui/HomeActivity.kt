@@ -161,7 +161,8 @@ class HomeActivity : AppCompatActivity() {
         )
         // Touch screens (car units, tablets) show every icon, there's no remote to dig through a menu;
         // only very narrow screens (phones) keep them behind "⋯".
-        if (Prefs.isTouchDevice && resources.configuration.screenWidthDp >= 700) {
+        // Wide screens (or a compact screen zoom) have room for every icon too.
+        if ((Prefs.isTouchDevice && resources.configuration.screenWidthDp >= 700) || resources.configuration.screenWidthDp >= 1100) {
             findViewById<Button>(R.id.tileMore).visibility = View.GONE
         } else {
             tucked.forEach { it.first.visibility = View.GONE }
@@ -521,15 +522,11 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun fitHero() {
+        // The text sits right under the top bar and the rows take the rest; on short screens the
+        // text gives up lines until the rows have room for at least one full row.
         val hero = findViewById<android.view.ViewGroup>(R.id.hero) ?: return
-        var need = hero.paddingTop + hero.paddingBottom
-        for (i in 0 until hero.childCount) {
-            val c = hero.getChildAt(i)
-            if (c.visibility == View.GONE) continue
-            val lp = c.layoutParams as android.view.ViewGroup.MarginLayoutParams
-            need += c.measuredHeight + lp.topMargin + lp.bottomMargin
-        }
-        if (need <= hero.height || heroFitStep >= 6) return
+        val rowsH = findViewById<View>(R.id.rowsFrame)?.height ?: return
+        if (rowsH >= (300 * resources.displayMetrics.density).toInt() || heroFitStep >= 6) return
         heroFitStep++
         when (heroFitStep) {
             1 -> findViewById<View>(R.id.accountInfo).visibility = View.GONE
