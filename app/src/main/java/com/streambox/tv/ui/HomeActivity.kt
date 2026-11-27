@@ -188,6 +188,9 @@ class HomeActivity : AppCompatActivity() {
         rowsView = findViewById(R.id.rows)
         rowsView.layoutManager = LinearLayoutManager(this)
         rowsView.itemAnimator = null
+        // Belt and braces: clip the rows to their own box whatever the parent allows.
+        rowsView.clipToOutline = true
+        rowsView.outlineProvider = android.view.ViewOutlineProvider.BOUNDS
         rowsView.adapter = RowsAdapter()
 
         setHeroIdle("Welcome", p.name, "Loading your channels, movies and series…")

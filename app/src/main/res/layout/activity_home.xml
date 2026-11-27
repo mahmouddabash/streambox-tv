@@ -178,13 +178,23 @@
         </LinearLayout>
 
         <!-- Content rows -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rows"
+        <!-- The frame clips the rows to their own area, so scrolling never draws them over the title
+             text or the top bar (the list itself has to draw outside for the focus zoom). -->
+        <FrameLayout
+            android:id="@+id/rowsFrame"
             android:layout_width="match_parent"
             android:layout_height="330dp"
             android:clipChildren="true"
-            android:clipToPadding="true"
-            android:paddingTop="10dp"
-            android:paddingBottom="24dp" />
+            android:clipToPadding="true">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rows"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipChildren="true"
+                android:clipToPadding="true"
+                android:paddingTop="10dp"
+                android:paddingBottom="24dp" />
+        </FrameLayout>
     </LinearLayout>
 </FrameLayout>
