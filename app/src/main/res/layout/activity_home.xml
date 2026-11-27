@@ -102,6 +102,7 @@
             <Button android:id="@+id/tileDownloads" style="@style/IconBtn" android:drawableStart="@drawable/ic_download_nav" />
             <Button android:id="@+id/tileRec" style="@style/IconBtn" android:drawableStart="@drawable/ic_rec_nav" />
             <Button android:id="@+id/tileRefresh" style="@style/IconBtn" android:drawableStart="@drawable/ic_refresh_nav" />
+            <Button android:id="@+id/tileMore" style="@style/IconBtn" android:drawableStart="@drawable/ic_more_nav" />
             <Button android:id="@+id/tileSettings" style="@style/IconBtn" android:drawableStart="@drawable/ic_settings_nav" />
             <Button android:id="@+id/tileProfiles" style="@style/IconBtn" android:drawableStart="@drawable/ic_profiles_nav" />
 

@@ -140,6 +140,19 @@ class HomeActivity : AppCompatActivity() {
             else startActivity(Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_SERIES))
         }
         refresh.setOnClickListener { load(true) }
+        // The top bar keeps the everyday icons; the rest sit behind "⋯" so nothing is pushed off screen.
+        val tucked = listOf(
+            findViewById<Button>(R.id.tileSurprise) to "🎲  Surprise me",
+            multi to "▦  Multi-screen",
+            rec to "⏺  Recordings",
+            refresh to "⟳  Refresh content"
+        )
+        tucked.forEach { it.first.visibility = View.GONE }
+        findViewById<Button>(R.id.tileMore).setOnClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setItems(tucked.map { Tr.s(it.second) }.toTypedArray()) { _, w -> tucked[w].first.performClick() }
+                .show()
+        }
         settings.setOnClickListener { Ui.guardKids(this) { startActivity(Intent(this, SettingsActivity::class.java)) } }
         profiles.setOnClickListener {
             if (!Repo.loaded) { finish(); return@setOnClickListener }
@@ -151,7 +164,7 @@ class HomeActivity : AppCompatActivity() {
                 }
                 .show()
         }
-        for ((b, label) in listOf(search to "Search", multi to "Multi-screen", downloads to "Downloads", rec to "Recordings", refresh to "Refresh content", settings to "Settings", profiles to "Switch profile")) {
+        for ((b, label) in listOf(search to "Search", multi to "Multi-screen", downloads to "Downloads", rec to "Recordings", refresh to "Refresh content", findViewById<Button>(R.id.tileMore) to "More", settings to "Settings", profiles to "Switch profile")) {
             b.contentDescription = label
             b.setOnFocusChangeListener { _, has -> if (has) status.text = label else if (!loading) status.text = "" }
         }
