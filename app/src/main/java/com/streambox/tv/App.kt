@@ -135,6 +135,9 @@ class App : Application(), coil.ImageLoaderFactory {
                 content.addView(btn, android.widget.FrameLayout.LayoutParams(size, size, android.view.Gravity.TOP or android.view.Gravity.START).apply {
                     setMargins((10 * d).toInt(), (10 * d).toInt(), 0, 0)
                 })
+                // On video screens the arrow stays out of the picture: it shows for a few seconds after
+                // you touch the screen (together with the player controls) and then fades away.
+                if (a is com.streambox.tv.ui.PlayerActivity || a is com.streambox.tv.ui.MultiViewActivity) autoHide(a, btn)
             }
             override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
             override fun onActivityResumed(a: android.app.Activity) {}
@@ -143,6 +146,25 @@ class App : Application(), coil.ImageLoaderFactory {
             override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
             override fun onActivityDestroyed(a: android.app.Activity) {}
         })
+    }
+
+    private fun autoHide(a: android.app.Activity, btn: android.view.View) {
+        val hide = Runnable { btn.animate().alpha(0f).setDuration(250).withEndAction { btn.visibility = android.view.View.GONE }.start() }
+        fun show() {
+            btn.removeCallbacks(hide)
+            btn.animate().cancel()
+            btn.visibility = android.view.View.VISIBLE
+            btn.alpha = 1f
+            btn.postDelayed(hide, 3_500)
+        }
+        show()
+        val original = a.window.callback ?: return
+        a.window.callback = object : android.view.Window.Callback by original {
+            override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+                if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) show()
+                return original.dispatchTouchEvent(event)
+            }
+        }
     }
 
     /**
