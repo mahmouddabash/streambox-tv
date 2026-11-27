@@ -53,7 +53,7 @@ class NetworkActivity : AppCompatActivity() {
         val vpn = com.streambox.tv.data.FreeVpn
         toast("Testing every free VPN entry point… (about 20 s)")
         lifecycleScope.launch {
-            val res = withContext(Dispatchers.IO) { vpn.pickFastest(this@NetworkActivity) }
+            val res = withContext(Dispatchers.IO) { vpn.pickFastest(this@NetworkActivity, stopWhenGood = false) }
             val labels = res.map { (if (it.ms == null) "✕  " + Tr.s("doesn't work here") else "✓ ${it.ms} ms") + "   •   " +
                 vpn.ENDPOINTS[it.index] + if (it.index == Prefs.vpnEndpoint && it.ms != null) "   ★ " + Tr.s("in use") else "" }
             AlertDialog.Builder(this@NetworkActivity)

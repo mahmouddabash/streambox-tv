@@ -112,17 +112,18 @@ object FreeVpn {
      * Tries every entry point through the running tunnel and keeps the fastest working one.
      * Only small test requests are used (nothing is sent to your provider).
      */
-    fun pickFastest(context: Context, onProgress: (Int, Int) -> Unit = { _, _ -> }): List<EntryResult> {
+    fun pickFastest(context: Context, stopWhenGood: Boolean = true, onProgress: (Int, Int) -> Unit = { _, _ -> }): List<EntryResult> {
         if (!Prefs.vpnOn) return emptyList()
         val out = ArrayList<EntryResult>()
-        for (i in ENDPOINTS.indices) {
-            onProgress(i + 1, ENDPOINTS.size)
+        val order = listOf(Prefs.vpnEndpoint.coerceIn(0, ENDPOINTS.size - 1)) + ENDPOINTS.indices.filter { it != Prefs.vpnEndpoint }
+        for ((n, i) in order.withIndex()) {
+            onProgress(n + 1, ENDPOINTS.size)
+            if (stopWhenGood && out.any { (it.ms ?: Long.MAX_VALUE) < 250 }) break
             Prefs.vpnEndpoint = i
             val conf = try { config(context) } catch (_: Exception) { null } ?: break
             val ms = try {
                 backend(context).setState(tunnel, Tunnel.State.UP, conf)
-                Thread.sleep(400) // let the tunnel shake hands
-                probe(seconds = 3, tries = 1)
+                quickCheck()
             } catch (_: Exception) { null }
             out.add(EntryResult(i, ms))
         }
@@ -150,12 +151,16 @@ object FreeVpn {
         try {
             if (!Prefs.vpnOn) return
             if (!start(context)) { Prefs.vpnOn = false; return }
-            // Only when the saved entry point doesn't answer: re-testing every start interrupted loading.
-            if (probe(seconds = 4, tries = 1) == null) pickFastest(context)
         } finally {
+            // The tunnel is up (or off): the app can go on right away — no waiting for test requests.
             ready.countDown()
         }
+        // Check in the background; only look for another entry point when this one doesn't answer.
+        if (quickCheck() == null) pickFastest(context)
     }
+
+    /** First answer through a new tunnel: 2 short tries (the first can be lost while it shakes hands). */
+    fun quickCheck(): Long? = probe(seconds = 2, tries = 1) ?: probe(seconds = 3, tries = 1)
 
     private val ready = java.util.concurrent.CountDownLatch(1)
 
