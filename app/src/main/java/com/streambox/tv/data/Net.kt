@@ -57,6 +57,8 @@ object Net {
     const val DNS_CUSTOM_IP = 9
     const val DNS_CUSTOM_DOH = 10
     const val DNS_SYSTEM_ONLY = 11
+    /** Tests every DNS with the provider by itself and uses the one that reaches it fastest. */
+    const val DNS_BEST = 12
 
     /** Order matters: the index is what's saved (0–2 kept from earlier versions). */
     val dnsChoices = listOf(
@@ -71,8 +73,67 @@ object Net {
         DnsChoice("Plain DNS 1.1.1.1 / 8.8.8.8 (not private)", udp = "1.1.1.1"),
         DnsChoice("Custom DNS server (IP address)…"),
         DnsChoice("Custom private DNS address (https://…)…"),
-        DnsChoice("The device's own DNS only")
+        DnsChoice("The device's own DNS only"),
+        DnsChoice("Best for my provider (tested automatically)")
     )
+
+    /** The DNS actually used: for [DNS_BEST] the winner of the last provider test. */
+    fun effectiveDns(): Int = if (Prefs.dnsMode == DNS_BEST) Prefs.bestDns else Prefs.dnsMode
+
+    data class DnsScore(val index: Int, val lookupMs: Long?, val connectMs: Long?) {
+        val ok get() = lookupMs != null && connectMs != null
+        val total get() = if (ok) lookupMs!! + connectMs!! else Long.MAX_VALUE
+    }
+
+    /**
+     * Tests every DNS against the provider: looks the address up, then opens a connection to the
+     * address it gave. A DNS that answers fast but with a blocked or wrong address fails the second step.
+     * All run at once, so this takes a few seconds at most.
+     */
+    fun scoreDnsFor(server: String): List<DnsScore> {
+        val uri = try { java.net.URI(server.trim()) } catch (_: Exception) { return emptyList() }
+        val host = uri.host ?: return emptyList()
+        val port = if (uri.port > 0) uri.port else if (uri.scheme == "https") 443 else 80
+        val idx = dnsChoices.indices.filter { it != 0 && it != DNS_BEST &&
+            (it != DNS_CUSTOM_IP || Prefs.customDns.isNotBlank()) && (it != DNS_CUSTOM_DOH || Prefs.customDoh.isNotBlank()) }
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(idx.size.coerceAtLeast(1))
+        return try {
+            idx.map { i ->
+                pool.submit(java.util.concurrent.Callable {
+                    val t = System.nanoTime()
+                    val ips = try { lookupWith(i, host)?.takeIf { it.isNotEmpty() } } catch (_: Exception) { null }
+                    val lookMs = ips?.let { (System.nanoTime() - t) / 1_000_000 }
+                    val conMs = ips?.firstNotNullOfOrNull { ip ->
+                        try {
+                            val c = System.nanoTime()
+                            java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress(ip, port), 4_000) }
+                            (System.nanoTime() - c) / 1_000_000
+                        } catch (_: Exception) { null }
+                    }
+                    DnsScore(i, lookMs, conMs)
+                })
+            }.map { f -> try { f.get(15, TimeUnit.SECONDS) } catch (_: Exception) { null } }.filterNotNull()
+                .sortedBy { it.total }
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    /**
+     * For "Best for my provider": re-tests when it's been 12 hours or the connection type changed
+     * (Wi-Fi ↔ mobile data), and switches to the winner. Returns the winner or null.
+     */
+    fun autoPickDns(context: android.content.Context, server: String, force: Boolean = false): DnsScore? {
+        if (Prefs.dnsMode != DNS_BEST || server.isBlank()) return null
+        val net = if (isMobileData(context)) "m" else "w"
+        if (!force && System.currentTimeMillis() - Prefs.bestDnsAt < 12 * 3_600_000L && Prefs.bestDnsNet == net) return null
+        val best = scoreDnsFor(server).firstOrNull { it.ok } ?: return null
+        Prefs.bestDns = best.index
+        Prefs.bestDnsAt = System.currentTimeMillis()
+        Prefs.bestDnsNet = net
+        clearDnsCache()
+        return best
+    }
 
     private val dohCache = java.util.concurrent.ConcurrentHashMap<String, Dns>()
 
@@ -234,10 +295,11 @@ object Net {
             }
             val why = ArrayList<String>()
             // Private DNS chosen in Network Center: ask it first, fall back to the usual order.
-            if (Prefs.dnsMode == DNS_SYSTEM_ONLY) return Dns.SYSTEM.lookup(hostname)
-            if (Prefs.dnsMode > 0) {
+            val mode = effectiveDns()
+            if (mode == DNS_SYSTEM_ONLY) return Dns.SYSTEM.lookup(hostname)
+            if (mode > 0) {
                 try {
-                    lookupWith(Prefs.dnsMode, hostname)?.let { if (it.isNotEmpty()) return it }
+                    lookupWith(mode, hostname)?.let { if (it.isNotEmpty()) return it }
                 } catch (e: Exception) {
                     why.add("chosen dns: ${e.javaClass.simpleName}")
                 }

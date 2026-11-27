@@ -21,6 +21,15 @@ class App : Application(), coil.ImageLoaderFactory {
         com.streambox.tv.data.Reminders.init(this)
         com.streambox.tv.ui.Tr.init(this)
         com.streambox.tv.data.Downloads.recover(this)
+        // Test every DNS against the provider in the background and use the fastest that reaches it.
+        Thread {
+            try {
+                Thread.sleep(2_500)
+                val server = com.streambox.tv.data.Repo.profile?.server ?: Prefs.profiles().firstOrNull()?.server ?: ""
+                com.streambox.tv.data.Net.autoPickDns(this, server)
+            } catch (_: Throwable) {
+            }
+        }.apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
         keepContentClearOfSystemBars()
         addTouchBackArrow()
         addNightMode()

@@ -15,6 +15,12 @@ object Prefs {
 
     fun init(context: Context) {
         sp = context.applicationContext.getSharedPreferences("streambox", Context.MODE_PRIVATE)
+        // Everyone on plain "Automatic" moves once to the new provider-tested DNS.
+        if (!sp.getBoolean("dnsBestMigrated", false)) {
+            val e = sp.edit().putBoolean("dnsBestMigrated", true)
+            if (sp.getInt("dnsMode", 0) == 0) e.putInt("dnsMode", 12)
+            e.apply()
+        }
         seedDefaultProfile(context)
     }
 
@@ -658,8 +664,19 @@ object Prefs {
         set(v) = sp.edit().putInt("sortMode", v).apply()
 
     /** DNS choice: index into [Net.dnsChoices] (0 = automatic). */
+    /** Winner of the automatic provider test ("Best for my provider"); 0 = not tested yet. */
+    var bestDns: Int
+        get() = sp.getInt("bestDns", 0)
+        set(v) = sp.edit().putInt("bestDns", v).apply()
+    var bestDnsAt: Long
+        get() = sp.getLong("bestDnsAt", 0L)
+        set(v) = sp.edit().putLong("bestDnsAt", v).apply()
+    var bestDnsNet: String
+        get() = sp.getString("bestDnsNet", "") ?: ""
+        set(v) = sp.edit().putString("bestDnsNet", v).apply()
+
     var dnsMode: Int
-        get() = sp.getInt("dnsMode", 0)
+        get() = sp.getInt("dnsMode", 12)
         set(v) = sp.edit().putInt("dnsMode", v).apply()
 
     private fun monthKey(): String = java.text.SimpleDateFormat("yyyyMM", java.util.Locale.US).format(java.util.Date())

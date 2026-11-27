@@ -88,6 +88,7 @@ class NetworkActivity : AppCompatActivity() {
         when (i) {
             Net.DNS_CUSTOM_IP -> if (Prefs.customDns.isNotBlank()) Tr.s("Custom DNS server") + ": " + Prefs.customDns else Tr.s(c.name)
             Net.DNS_CUSTOM_DOH -> if (Prefs.customDoh.isNotBlank()) Tr.s("Custom private DNS") + ": " + Prefs.customDoh.removePrefix("https://") else Tr.s(c.name)
+            Net.DNS_BEST -> Tr.s(c.name) + if (Prefs.bestDns > 0) "  →  " + Tr.s(Net.dnsChoices[Prefs.bestDns.coerceIn(0, Net.dnsChoices.size - 1)].name) else ""
             else -> Tr.s(c.name)
         }
     }
@@ -107,7 +108,7 @@ class NetworkActivity : AppCompatActivity() {
         }
         rows.add(Row("Speed test", speed) { speedTest() })
         rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, Net.dnsChoices.size - 1)] + "   •   " + dns) { chooseDns() })
-        rows.add(Row("Find the fastest DNS", Tr.s("Tests every DNS with your provider's address and lets you pick")) { fastestDns() })
+        rows.add(Row("Find the fastest DNS", Tr.s("Tests every DNS with your provider: lookup + real connection, fastest first")) { fastestDns() })
         rows.add(Row("DNS servers", dnsServers))
         rows.add(Row("Provider address (IP)", dnsResult + "   •   " + Tr.s("OK = check again")) { quickChecks() })
         val quota = Prefs.dataQuotaGb
@@ -266,30 +267,44 @@ class NetworkActivity : AppCompatActivity() {
 
     private fun applyDns(mode: Int) {
         Prefs.dnsMode = mode
+        if (mode == Net.DNS_BEST) { fastestDns(); return }
         Net.clearDnsCache()
         dns = Tr.s("Checking…")
         quickChecks()
     }
 
-    /** Times a lookup of the provider's address with every DNS choice and offers the results, fastest first. */
+    /**
+     * Tests every DNS against the provider (address lookup + a real connection to it) and lists them
+     * fastest first. With "Best for my provider" the winner is switched on by itself.
+     */
     private fun fastestDns() {
-        val host = Repo.profile?.server?.toHttpHostOrNull() ?: "www.google.com"
-        toast("Testing every DNS… (a few seconds)")
+        val server = Repo.profile?.server ?: ""
+        val host = server.toHttpHostOrNull() ?: return toast("Add a provider first")
+        toast("Testing every DNS with your provider… (a few seconds)")
         lifecycleScope.launch {
-            val results = withContext(Dispatchers.IO) {
-                Net.dnsChoices.indices.filter { it != 0 && (it != Net.DNS_CUSTOM_IP || Prefs.customDns.isNotBlank()) &&
-                    (it != Net.DNS_CUSTOM_DOH || Prefs.customDoh.isNotBlank()) }
-                    .map { i -> i to Net.testDns(i, host) }
-            }
-            val sorted = results.sortedBy { it.second ?: Long.MAX_VALUE }
+            val sorted = withContext(Dispatchers.IO) { Net.scoreDnsFor(server) }
             val names = dnsNames
-            val labels = sorted.map { (i, ms) -> (if (ms == null) "✕  " + Tr.s("failed") else "$ms ms") + "   •   " + names[i] +
-                if (i == Prefs.dnsMode) "   ✓" else "" }.toTypedArray()
+            val winner = sorted.firstOrNull { it.ok }
+            if (Prefs.dnsMode == Net.DNS_BEST && winner != null) {
+                Prefs.bestDns = winner.index
+                Prefs.bestDnsAt = System.currentTimeMillis()
+                Prefs.bestDnsNet = if (Net.isMobileData(this@NetworkActivity)) "m" else "w"
+                Net.clearDnsCache()
+            }
+            val labels = sorted.map { r ->
+                (if (!r.ok) "✕  " + Tr.s(if (r.lookupMs == null) "no answer" else "address not reachable")
+                else "${r.total} ms") + "   •   " + names[r.index] +
+                    (if (r == winner) "   ★ " + Tr.s("best") else "") + if (r.index == Net.effectiveDns()) "   ✓" else ""
+            }.toTypedArray()
             AlertDialog.Builder(this@NetworkActivity)
-                .setTitle(Tr.s("Fastest DNS for") + " $host")
-                .setItems(labels) { _, w -> if (sorted[w].second != null) applyDns(sorted[w].first) else toast("That DNS didn't answer") }
+                .setTitle(Tr.s("DNS test with") + " $host")
+                .setItems(labels) { _, w -> if (sorted[w].ok) applyDns(sorted[w].index) else toast("That DNS can't reach your provider") }
+                .setPositiveButton(Tr.s("Use the best automatically")) { _, _ -> Prefs.dnsMode = Net.DNS_BEST
+                    winner?.let { Prefs.bestDns = it.index; Prefs.bestDnsAt = System.currentTimeMillis() }
+                    Net.clearDnsCache(); quickChecks() }
                 .setNegativeButton(Tr.s("Close"), null)
                 .show()
+            quickChecks()
         }
     }
 
