@@ -545,6 +545,14 @@ object Prefs {
     }
 
     /** Where a series' opening titles end (ms), set from the player; 0 = not set. */
+    /** Find intros automatically by comparing two downloaded episodes of a series. */
+    var autoIntro: Boolean
+        get() = sp.getBoolean("autoIntro", true)
+        set(v) = sp.edit().putBoolean("autoIntro", v).apply()
+
+    fun introChecked(seriesId: String): Boolean = sp.getBoolean("introChk_$seriesId", false)
+    fun setIntroChecked(seriesId: String) = sp.edit().putBoolean("introChk_$seriesId", true).apply()
+
     fun introEnd(seriesId: String): Long = sp.getLong("intro_$seriesId", 0L)
 
     fun setIntroEnd(seriesId: String, ms: Long) {

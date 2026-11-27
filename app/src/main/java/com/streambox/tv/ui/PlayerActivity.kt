@@ -416,13 +416,7 @@ class PlayerActivity : AppCompatActivity() {
     /** Copy of an .srt file with every time moved by [ms]. */
     private fun shiftSrt(src: java.io.File, ms: Long): java.io.File {
         val out = java.io.File(src.parentFile, src.nameWithoutExtension + "_sync.srt")
-        val re = Regex("(\\d{1,2}):(\\d{2}):(\\d{2})[,.](\\d{3})")
-        val text = src.readText().replace(re) { m ->
-            val (h, mi, s, f) = m.destructured
-            val t = (((h.toLong() * 60 + mi.toLong()) * 60 + s.toLong()) * 1000 + f.toLong() + ms).coerceAtLeast(0)
-            String.format(java.util.Locale.US, "%02d:%02d:%02d,%03d", t / 3_600_000, t / 60_000 % 60, t / 1000 % 60, t % 1000)
-        }
-        out.writeText(text)
+        out.writeText(com.streambox.tv.data.Names.shiftSrt(src.readText(), ms))
         return out
     }
 

@@ -167,13 +167,13 @@ class SearchActivity : AppCompatActivity() {
             }
             if (byCast.isNotEmpty()) out.add("🎭 Series starring “${text.trim()}” (${byCast.size})" to byCast)
             // Typed in one script, title in the other ("Saqr" ⇄ "صقر"): match by sound.
-            val key = skeleton(text)
+            val key = com.streambox.tv.data.Names.skeleton(text)
             val latin = text.any { it in 'a'..'z' || it in 'A'..'Z' }
             val arabic = text.any { it in '\u0600'..'\u06FF' }
             if (key.length >= 3 && latin != arabic) {
                 val sounds = withContext(Dispatchers.Default) {
                     fun other(n: String) = if (latin) n.any { it in '\u0600'..'\u06FF' } else n.any { it in 'a'..'z' || it in 'A'..'Z' }
-                    fun hit(n: String) = other(n) && skeleton(n).contains(key)
+                    fun hit(n: String) = other(n) && com.streambox.tv.data.Names.skeleton(n).contains(key)
                     val seen = out.flatMap { it.second }.toSet()
                     (Repo.channelsIn(Repo.CAT_ALL).filter { hit(it.name) } + Repo.moviesIn(Repo.CAT_ALL).filter { hit(it.name) } +
                         Repo.seriesIn(Repo.CAT_ALL).filter { hit(it.name) }).filter { it !in seen }.take(60)
@@ -214,7 +214,7 @@ class SearchActivity : AppCompatActivity() {
         val c = all.firstOrNull { norm(it.name) == want }
             ?: all.firstOrNull { norm(it.name).replace(" ", "") == want.replace(" ", "") }
             ?: all.filter { norm(it.name).contains(want) }.minByOrNull { it.name.length }
-            ?: all.filter { skeleton(it.name).let { s -> s.length >= 2 && s == skeleton(want) } }.minByOrNull { it.name.length }
+            ?: all.filter { com.streambox.tv.data.Names.skeleton(it.name).let { s -> s.length >= 2 && s == com.streambox.tv.data.Names.skeleton(want) } }.minByOrNull { it.name.length }
             ?: return false
         Ui.play(this, listOf(PlayItem("", c.name, Repo.urlFor(c), true, c.id)), 0)
         finish()
@@ -294,29 +294,6 @@ class SearchActivity : AppCompatActivity() {
         if (rating != null) parts.add("★ ${rating.toString().removeSuffix(".0")}+")
         if (year != null) parts.add(year)
         return parts.joinToString(" ") to out
-    }
-
-    /**
-     * Sound-alike key that works across Arabic and Latin spelling: consonants only, with similar
-     * sounds merged ("Saqr" and "صقر" both give "skr", "Mohamed" and "محمد" give "mhmd").
-     */
-    private fun skeleton(s: String): String {
-        val ar = mapOf(
-            'ا' to "", 'أ' to "", 'إ' to "", 'آ' to "", 'ء' to "", 'ئ' to "", 'ؤ' to "", 'ى' to "", 'ي' to "y", 'و' to "w",
-            'ب' to "b", 'ت' to "t", 'ث' to "t", 'ج' to "j", 'ح' to "h", 'خ' to "k", 'د' to "d", 'ذ' to "d", 'ر' to "r",
-            'ز' to "z", 'س' to "s", 'ش' to "sh", 'ص' to "s", 'ض' to "d", 'ط' to "t", 'ظ' to "z", 'ع' to "", 'غ' to "g",
-            'ف' to "f", 'ق' to "k", 'ك' to "k", 'ل' to "l", 'م' to "m", 'ن' to "n", 'ه' to "h", 'ة' to "", 'پ' to "b", 'گ' to "g"
-        )
-        val sb = StringBuilder()
-        for (ch in s.lowercase()) {
-            val a = ar[ch]
-            if (a != null) sb.append(a) else if (ch in 'a'..'z' || ch in '0'..'9') sb.append(ch)
-        }
-        return sb.toString()
-            .replace("sh", "s").replace("kh", "k").replace("gh", "g").replace("th", "t").replace("dh", "d").replace("ph", "f")
-            .replace('q', 'k').replace('c', 'k').replace('x', 'k').replace('v', 'f').replace('p', 'b').replace('j', 'g').replace('e', 'a')
-            .replace(Regex("[aeiouyw]"), "")
-            .replace(Regex("(.)\\1+"), "$1")
     }
 
     /** Lower-case, accents removed, Arabic letter variants unified, punctuation to spaces. */

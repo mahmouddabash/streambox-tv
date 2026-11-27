@@ -292,8 +292,10 @@ class DownloadService : Service() {
                 continue
             }
             // Nothing to download: index finished files so jumps inside them are instant.
-            val ix = Downloads.all().firstOrNull { Downloads.needsIndex(it) } ?: break
-            buildIndex(ix)
+            val ix = Downloads.all().firstOrNull { Downloads.needsIndex(it) }
+            if (ix != null) { buildIndex(ix); continue }
+            // Then, once per series: find the opening titles by comparing two downloaded episodes.
+            if (!findIntro()) break
         }
         if (android.os.Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
         stopSelf()
@@ -417,6 +419,27 @@ class DownloadService : Service() {
         val needMs = bytes * 8 / (mbps * 1000L)
         val tookMs = (System.nanoTime() - startNs) / 1_000_000
         if (needMs > tookMs) delay(needMs - tookMs)
+    }
+
+    /** Returns true when a series was checked (so the loop looks for another one). */
+    private fun findIntro(): Boolean {
+        if (!Prefs.autoIntro) return false
+        val bySeries = Downloads.all()
+            .filter { it.status == Downloads.DONE && it.key.startsWith("ep_") && File(it.file).exists() }
+            .groupBy { Prefs.episodeSeries(it.key) }
+        val (sid, eps) = bySeries.entries.firstOrNull { (sid, eps) ->
+            sid.isNotEmpty() && eps.size >= 2 && Prefs.introEnd(sid) == 0L && !Prefs.introChecked(sid)
+        }?.toPair() ?: return false
+        updateNotificationText("Finding the intro: ${eps[0].title}")
+        val found = try {
+            IntroFinder.find(File(eps[0].file), File(eps[1].file)) { scope.isActive && Downloads.all().none { it.status == Downloads.QUEUED } }
+        } catch (_: Exception) {
+            null
+        }
+        if (!scope.isActive || Downloads.all().any { it.status == Downloads.QUEUED }) return true // try again later
+        Prefs.setIntroChecked(sid)
+        if (found != null && found.endMs in 15_000L..240_000L && Prefs.introEnd(sid) == 0L) Prefs.setIntroEnd(sid, found.endMs)
+        return true
     }
 
     private fun buildIndex(d: Downloads.Item) {

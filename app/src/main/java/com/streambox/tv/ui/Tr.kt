@@ -756,6 +756,8 @@ object Tr {
         "This channel can't go back" to "لا يمكن الرجوع في هذه القناة",
         "Back to live in the menu" to "العودة للبث المباشر من القائمة",
         "Skip intro" to "تخطي المقدمة",
+        "Find intros automatically" to "اكتشاف المقدمة تلقائيًا",
+        "On: when 2 episodes of a series are downloaded, the opening titles are found by comparing them" to "مفعّل: عند تنزيل حلقتين من مسلسل تُكتشف المقدمة بمقارنتهما",
         "Picture quality and data" to "جودة الصورة والبيانات",
         "Save data on mobile data / hotspot (recommended)" to "توفير البيانات على بيانات الجوال / نقطة الاتصال (موصى به)",
         "Always best quality" to "أفضل جودة دائمًا",

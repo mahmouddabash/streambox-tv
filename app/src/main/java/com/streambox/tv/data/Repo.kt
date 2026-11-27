@@ -700,35 +700,18 @@ object Repo {
 
     // ------------------------------------------------------------------ Channel qualities
 
-    private val qualityTokens = Regex(
-        "(?i)(\\b(4k|uhd|2160p?|fhd|1080[pi]?|hd|720p?|sd|576p?|480p?|hevc|h\\.?26[45]|x26[45]|50fps|60fps|hq|lq|raw|backup|multi)\\b|ᵁᴴᴰ|ᶠᴴᴰ|ᴴᴰ|ˢᴰ|⁴ᴷ|[◉●★✪♛™®]|\\(\\s*\\)|\\[\\s*\\])"
-    )
-
     // Results of the name analysis are remembered: computing them while scrolling made lists lag.
     private val rankMemo = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private val groupMemo = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val movieGroupMemo = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** 4 = 4K, 3 = Full HD, 2 = HD (or unknown), 1 = SD. */
-    fun qualityRank(name: String): Int = rankMemo.getOrPut(name) { computeRank(name) }
-
-    private fun computeRank(name: String): Int {
-        val n = name.lowercase()
-        return when {
-            Regex("\\b(4k|uhd|2160p?)\\b").containsMatchIn(n) || "ᵁᴴᴰ" in name || "⁴ᴷ" in name -> 4
-            Regex("\\b(fhd|1080[pi]?)\\b").containsMatchIn(n) || "ᶠᴴᴰ" in name -> 3
-            Regex("\\b(sd|576p?|480p?|lq)\\b").containsMatchIn(n) || "ˢᴰ" in name -> 1
-            else -> 2
-        }
-    }
+    fun qualityRank(name: String): Int = rankMemo.getOrPut(name) { Names.rank(name) }
 
     fun qualityLabel(rank: Int) = when (rank) { 4 -> "4K"; 3 -> "FHD"; 1 -> "SD"; else -> "HD" }
 
     /** Same channel in different qualities share this key ("MBC 1 FHD", "MBC 1 HD" → "mbc 1"). */
-    fun qualityGroup(name: String): String = groupMemo.getOrPut(name) { computeGroup(name) }
-
-    private fun computeGroup(name: String): String =
-        qualityTokens.replace(name.lowercase(), " ").replace(Regex("[|:_\\-]+\\s*$"), " ").replace(Regex("\\s+"), " ").trim()
+    fun qualityGroup(name: String): String = groupMemo.getOrPut(name) { Names.group(name) }
 
     /** One channel per group: the hand-picked quality, else the best one allowed by the preference. */
     fun collapseQualities(list: List<Channel>): List<Channel> {

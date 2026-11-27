@@ -77,7 +77,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private val sections = linkedMapOf(
         "Playback" to setOf("Stereo sound", "Audio decoding", "Picture mode", "Video quality", "Player", "Audio language", "Subtitles",
-            "Subtitle style", "Subtitle languages (online)", "OpenSubtitles API key", "Even volume", "Match frame rate", "Skip intro",
+            "Subtitle style", "Subtitle languages (online)", "OpenSubtitles API key", "Even volume", "Match frame rate", "Skip intro", "Find intros automatically",
             "Resume where I left off", "Picture-in-picture on Home button"),
         "Live TV" to setOf("Live stream format", "Channel preview in Live TV", "TV guide time shift", "Refresh channel list automatically",
             "Channel manager", "Channel qualities", "Pause live TV on any channel", "Start with the last channel", "Number buttons", "Time format"),
@@ -301,6 +301,10 @@ class SettingsActivity : AppCompatActivity() {
         })
         rows.add(Row("Skip intro", if (Prefs.autoSkipIntro) "Automatic: marked intros are skipped by themselves" else "Button: a Skip intro button appears (mark an intro from the player menu)") {
             Prefs.autoSkipIntro = !Prefs.autoSkipIntro
+            refresh()
+        })
+        rows.add(Row("Find intros automatically", if (Prefs.autoIntro) "On: when 2 episodes of a series are downloaded, the opening titles are found by comparing them" else "Off") {
+            Prefs.autoIntro = !Prefs.autoIntro
             refresh()
         })
         val dataOpts = arrayOf("Save data on mobile data / hotspot (recommended)", "Always best quality", "Always save data")
