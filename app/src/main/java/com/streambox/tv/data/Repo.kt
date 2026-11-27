@@ -556,7 +556,30 @@ object Repo {
     }
 
     /** "Because you watched": best-rated titles from the same category as the latest film watched. */
+    // Remembered until what you watched (or the catalogue / hidden titles) changes: Home rebuilds
+    // its rows every time you come back, and these scans were the slow part.
+    @Volatile private var bywMovieKey: Any? = null
+    @Volatile private var bywMovie: Pair<Movie, List<Movie>>? = null
+    @Volatile private var bywSeriesKey: Any? = null
+    @Volatile private var bywSeries: Pair<Series, List<Series>>? = null
+
     fun becauseYouWatchedMovie(limit: Int = 20): Pair<Movie, List<Movie>>? {
+        val key = listOf(System.identityHashCode(movies), userKey, Prefs.resumeIds("vod_${userKey}_").firstOrNull(), Prefs.hidden(userKey).size)
+        if (key == bywMovieKey) return bywMovie
+        bywMovie = computeBywMovie(limit)
+        bywMovieKey = key
+        return bywMovie
+    }
+
+    fun becauseYouWatchedSeries(limit: Int = 20): Pair<Series, List<Series>>? {
+        val key = listOf(System.identityHashCode(series), userKey, recentSeries(1).firstOrNull()?.id, Prefs.hidden(userKey).size)
+        if (key == bywSeriesKey) return bywSeries
+        bywSeries = computeBywSeries(limit)
+        bywSeriesKey = key
+        return bywSeries
+    }
+
+    private fun computeBywMovie(limit: Int): Pair<Movie, List<Movie>>? {
         val hid = Prefs.hidden(userKey)
         val last = Prefs.resumeIds("vod_${userKey}_").firstNotNullOfOrNull { movieById[it] } ?: return null
         val watched = Prefs.resumeIds("vod_${userKey}_").toSet()
@@ -566,7 +589,7 @@ object Repo {
     }
 
     /** Same idea for series: same genre (from the provider), else the same category. */
-    fun becauseYouWatchedSeries(limit: Int = 20): Pair<Series, List<Series>>? {
+    private fun computeBywSeries(limit: Int): Pair<Series, List<Series>>? {
         val last = recentSeries(1).firstOrNull() ?: return null
         val genres = last.genre.split(',', '/', '|').map { it.trim().lowercase() }.filter { it.length > 2 }
         val pool = seriesIn(CAT_ALL).filter { it.id != last.id }

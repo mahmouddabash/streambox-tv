@@ -140,6 +140,8 @@ class HomeActivity : AppCompatActivity() {
             else startActivity(Intent(this, BrowseActivity::class.java).putExtra(BrowseActivity.EXTRA_SECTION, Repo.SECTION_SERIES))
         }
         refresh.setOnClickListener { load(true) }
+        // Narrow screens (car units, phones): no clock in the top bar, so the buttons always fit.
+        if (resources.configuration.screenWidthDp < 1100) findViewById<View>(R.id.clock)?.visibility = View.GONE
         // The top bar keeps the everyday icons; the rest sit behind "⋯" so nothing is pushed off screen.
         val tucked = listOf(
             findViewById<Button>(R.id.tileSurprise) to "🎲  Surprise me",
