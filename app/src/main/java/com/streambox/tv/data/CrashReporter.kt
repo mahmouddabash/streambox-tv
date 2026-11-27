@@ -35,6 +35,38 @@ object CrashReporter {
             }
             previous?.uncaughtException(thread, e)
         }
+        recordSilentExit(app)
+    }
+
+    /**
+     * Some closes leave no Java error (a crash inside native code such as the VPN, the system
+     * running out of memory, or a freeze). Android 11+ keeps the reason: save it as a report too.
+     */
+    private fun recordSilentExit(app: Application) {
+        if (Build.VERSION.SDK_INT < 30 || file.exists()) return
+        try {
+            val am = app.getSystemService(android.app.ActivityManager::class.java) ?: return
+            val info = am.getHistoricalProcessExitReasons(app.packageName, 0, 1).firstOrNull() ?: return
+            val sp = app.getSharedPreferences("streambox_crash", 0)
+            if (info.timestamp <= sp.getLong("seenExit", 0L)) return
+            sp.edit().putLong("seenExit", info.timestamp).apply()
+            val why = when (info.reason) {
+                android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "Native crash"
+                android.app.ApplicationExitInfo.REASON_ANR -> "App not responding (ANR)"
+                android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "Closed by the system: low memory"
+                android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Closed by the system: too much resource use"
+                android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "Initialization failure"
+                else -> return // normal exits (user, update, background kill) are not problems
+            }
+            var trace = ""
+            if (info.reason == android.app.ApplicationExitInfo.REASON_ANR) {
+                trace = try { info.traceInputStream?.bufferedReader()?.use { it.readText().take(6000) } ?: "" } catch (_: Throwable) { "" }
+            }
+            file.writeText(header() + "\nExit: $why (${info.description ?: ""})\nWhen: " +
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(info.timestamp)) +
+                "\nMemory at exit: ${info.pss / 1024} MB\nFree VPN on: ${try { Prefs.vpnOn } catch (_: Throwable) { "?" }}\n\n" + scrub(trace))
+        } catch (_: Throwable) {
+        }
     }
 
     fun header(): String = buildString {
@@ -73,7 +105,7 @@ object CrashReporter {
     }
 
     fun showReportQr(activity: Activity, report: String) {
-        val title = report.lineSequence().firstOrNull { it.contains("Exception") || it.contains("Error") }?.take(90) ?: "Crash report"
+        val title = report.lineSequence().firstOrNull { it.contains("Exception") || it.contains("Error") || it.startsWith("Exit:") }?.take(90) ?: "Crash report"
         val url = "https://github.com/mahmouddabash/streambox-tv/issues/new?title=" + Uri.encode("Crash: $title") +
             "&body=" + Uri.encode("```\n" + report.take(1400) + "\n```")
         val pad = (20 * activity.resources.displayMetrics.density).toInt()

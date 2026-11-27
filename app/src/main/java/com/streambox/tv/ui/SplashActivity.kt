@@ -84,7 +84,7 @@ class SplashActivity : AppCompatActivity() {
         if (Prefs.vpnOn && !vpnWaited) {
             vpnWaited = true
             Thread {
-                com.streambox.tv.data.FreeVpn.awaitStart(8_000)
+                com.streambox.tv.data.FreeVpn.awaitStart(20_000)
                 runOnUiThread { next() }
             }.start()
             return

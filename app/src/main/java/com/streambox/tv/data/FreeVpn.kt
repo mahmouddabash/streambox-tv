@@ -151,12 +151,13 @@ object FreeVpn {
         try {
             if (!Prefs.vpnOn) return
             if (!start(context)) { Prefs.vpnOn = false; return }
+            // Check before the app goes on; if this entry point doesn't answer, look for another now.
+            // Never switch entry points later in the background: restarting the tunnel while a video
+            // is playing could close the app.
+            if (quickCheck() == null) pickFastest(context)
         } finally {
-            // The tunnel is up (or off): the app can go on right away — no waiting for test requests.
             ready.countDown()
         }
-        // Check in the background; only look for another entry point when this one doesn't answer.
-        if (quickCheck() == null) pickFastest(context)
     }
 
     /** First answer through a new tunnel: 2 short tries (the first can be lost while it shakes hands). */
