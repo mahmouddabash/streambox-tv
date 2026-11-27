@@ -7,7 +7,7 @@ import org.junit.Test
 import java.io.File
 
 class TsIndexTest {
-    private fun tmp(bytes: ByteArray) = File.createTempFile("sb", ".ts").apply { writeBytes(bytes); deleteOnExit() }
+    private fun tmp(bytes: ByteArray) = File.createTempFile("sbtest", ".ts").apply { writeBytes(bytes); deleteOnExit() }
 
     @Test
     fun recognisesTransportStreams() {
