@@ -294,10 +294,18 @@ class NetworkActivity : AppCompatActivity() {
                 Net.clearDnsCache()
             }
             val labels = sorted.map { r ->
-                (if (!r.ok) "✕  " + Tr.s(r.why.ifEmpty { "failed" })
-                else "✓ " + Tr.s("login") + " ${r.total} ms") + "   •   " + names[r.index] +
+                (if (!r.ok) "✕  " + Tr.s(r.why.ifEmpty { "failed" }).replace(Regex(" \\(HTTP \\d+\\)"), "")
+                else "✓ " + Tr.s("login") + " ${r.total} ms") + "   •   " + names[r.index] + (if (r.ip.isNotEmpty()) "   →  ${r.ip}" else "") +
                     (if (r == winner) "   ★ " + Tr.s("best") else "") + if (r.index == Net.effectiveDns()) "   ✓" else ""
             }.toTypedArray()
+            val refused = sorted.isNotEmpty() && winner == null && sorted.any { it.why.startsWith("provider refused") }
+            if (refused) {
+                AlertDialog.Builder(this@NetworkActivity)
+                    .setTitle(Tr.s("Your provider is refusing this internet connection"))
+                    .setMessage(Tr.s("Every DNS found your provider, but the provider answered \"forbidden\" (403). This isn't a DNS problem: the provider is blocking the internet address of this connection (your home internet). It usually works on mobile data / a phone hotspot because that's a different address.\n\nWhat helps:\n•  Restart your router (you usually get a new internet address).\n•  If it still fails, ask your provider to unblock your connection, or use a VPN on the TV.\n•  Too many devices or logins at once can cause a temporary block: close the app on other devices and wait 30–60 minutes."))
+                    .setPositiveButton(Tr.s("Show the results"), null)
+                    .show()
+            }
             AlertDialog.Builder(this@NetworkActivity)
                 .setTitle(Tr.s("Login test with") + " $host")
                 .setItems(labels) { _, w -> if (sorted[w].ok) applyDns(sorted[w].index) else toast("Login through that DNS failed") }

@@ -97,17 +97,17 @@ object Net {
     /** The DNS actually used: for [DNS_BEST] the winner of the last provider test. */
     fun effectiveDns(): Int = if (Prefs.dnsMode == DNS_BEST) Prefs.bestDns else Prefs.dnsMode
 
-    /** [connectMs] = time to log in to the provider through this DNS; [why] when it failed. */
-    data class DnsScore(val index: Int, val lookupMs: Long?, val connectMs: Long?, val why: String = "") {
+    /** [connectMs] = time to log in to the provider at the address this DNS gave; [why] when it failed. */
+    data class DnsScore(val index: Int, val lookupMs: Long?, val connectMs: Long?, val why: String = "", val ip: String = "") {
         val ok get() = lookupMs != null && connectMs != null
         val total get() = if (ok) lookupMs!! + connectMs!! else Long.MAX_VALUE
     }
 
     /**
-     * Tests every DNS with a real login to the provider: looks the address up with that DNS only,
-     * then logs in through it (Xtream: the account check; M3U: the start of the playlist) and checks
-     * the answer is a valid login. A DNS that gives a blocked or wrong address fails here.
-     * All run at once, so this takes a few seconds at most.
+     * Tests every DNS with a real login to the provider, without hammering it: first every DNS looks
+     * up the provider's address (all at once — that only talks to the DNS servers), then the app logs
+     * in once per different address they gave (usually 1–3 logins, one after another). Many logins
+     * at the same moment can make a provider block your internet address.
      */
     fun scoreDnsFor(p: Profile): List<DnsScore> {
         val loginUrl = if (p.isXtream) {
@@ -115,47 +115,62 @@ object Net {
             p.server.trimEnd('/') + "/player_api.php?username=" + java.net.URLEncoder.encode(p.username, "UTF-8") +
                 "&password=" + java.net.URLEncoder.encode(p.password, "UTF-8")
         } else p.m3uUrl.ifBlank { return emptyList() }
+        val host = try { java.net.URI(loginUrl).host } catch (_: Exception) { null } ?: return emptyList()
         val idx = dnsChoices.indices.filter { it != 0 && it != DNS_BEST &&
             (it != DNS_CUSTOM_IP || Prefs.customDns.isNotBlank()) && (it != DNS_CUSTOM_DOH || Prefs.customDoh.isNotBlank()) }
         val pool = java.util.concurrent.Executors.newFixedThreadPool(idx.size.coerceAtLeast(1))
-        return try {
-            idx.map { i -> pool.submit(java.util.concurrent.Callable { loginTest(i, loginUrl, p.isXtream) }) }
-                .map { f -> try { f.get(25, TimeUnit.SECONDS) } catch (_: Exception) { null } }.filterNotNull()
-                .sortedBy { it.total }
+        val looked: List<Triple<Int, Long?, InetAddress?>> = try {
+            idx.map { i ->
+                pool.submit(java.util.concurrent.Callable {
+                    val t = System.nanoTime()
+                    val ip = try { lookupWith(i, host)?.firstOrNull() } catch (_: Exception) { null }
+                    Triple(i, ip?.let { (System.nanoTime() - t) / 1_000_000 }, ip)
+                })
+            }.mapIndexed { n, f -> try { f.get(12, TimeUnit.SECONDS) } catch (_: Exception) { Triple(idx[n], null, null) } }
         } finally {
             pool.shutdownNow()
         }
+        // One login per different address, most common first, at most 4.
+        val addrs = looked.mapNotNull { it.third }.groupingBy { it.hostAddress ?: "" }.eachCount()
+            .entries.sortedByDescending { it.value }.map { it.key }.take(4)
+        val loginResult = HashMap<String, Pair<Long?, String>>()
+        for ((n, a) in addrs.withIndex()) {
+            if (n > 0) Thread.sleep(400)
+            loginResult[a] = loginAt(InetAddress.getByName(a), loginUrl, p.isXtream)
+        }
+        return looked.map { (i, ms, ip) ->
+            val a = ip?.hostAddress ?: ""
+            val r = loginResult[a]
+            when {
+                ip == null -> DnsScore(i, null, null, "no answer")
+                r == null -> DnsScore(i, ms, null, "not tested", a)
+                r.first == null -> DnsScore(i, ms, null, r.second, a)
+                else -> DnsScore(i, ms, r.first, "", a)
+            }
+        }.sortedBy { it.total }
     }
 
-    private fun loginTest(i: Int, url: String, xtream: Boolean): DnsScore {
-        var lookMs: Long? = null
-        val dns = object : Dns {
-            override fun lookup(hostname: String): List<InetAddress> {
-                if (hostname.isNotEmpty() && (hostname[0].isDigit() || hostname.contains(':'))) return Dns.SYSTEM.lookup(hostname)
-                val t = System.nanoTime()
-                val r = lookupWith(i, hostname)?.takeIf { it.isNotEmpty() } ?: throw UnknownHostException("no answer")
-                if (lookMs == null) lookMs = (System.nanoTime() - t) / 1_000_000
-                return r
-            }
-        }
-        val client = bootstrap.newBuilder().dns(dns).connectTimeout(6, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS)
-            .callTimeout(20, TimeUnit.SECONDS).build()
+    /** Logs in at a fixed address; (ms, "") when it worked, (null, why) when not. */
+    private fun loginAt(addr: InetAddress, url: String, xtream: Boolean): Pair<Long?, String> {
+        val client = bootstrap.newBuilder()
+            .dns(object : Dns { override fun lookup(hostname: String) = listOf(addr) })
+            .connectTimeout(6, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).callTimeout(20, TimeUnit.SECONDS).build()
         val t = System.nanoTime()
         return try {
             client.newCall(Request.Builder().url(url).header("User-Agent", userAgent()).build()).execute().use { r ->
                 val head = r.body?.source()?.let { src -> src.request(4096); src.buffer.snapshot().utf8().take(4096) } ?: ""
-                val ms = (System.nanoTime() - t) / 1_000_000 - (lookMs ?: 0)
+                val ms = (System.nanoTime() - t) / 1_000_000
                 val good = r.isSuccessful && if (xtream) Regex("\"auth\"\\s*:\\s*\"?1").containsMatchIn(head) || head.contains("\"user_info\"") && !head.contains("\"auth\":0")
                     else head.trimStart('\uFEFF', ' ', '\r', '\n').startsWith("#EXTM3U")
                 when {
-                    lookMs == null -> DnsScore(i, null, null, "no answer")
-                    !r.isSuccessful -> DnsScore(i, lookMs, null, "HTTP ${r.code}")
-                    !good -> DnsScore(i, lookMs, null, "login refused")
-                    else -> DnsScore(i, lookMs, ms.coerceAtLeast(1))
+                    r.code == 403 || r.code == 401 -> null to "provider refused this internet connection (HTTP ${r.code})"
+                    !r.isSuccessful -> null to "HTTP ${r.code}"
+                    !good -> null to "login refused"
+                    else -> ms.coerceAtLeast(1) to ""
                 }
             }
         } catch (e: Exception) {
-            DnsScore(i, lookMs, null, if (lookMs == null) "no answer" else if (e is SocketTimeoutException) "timed out" else "not reachable")
+            null to if (e is SocketTimeoutException) "timed out" else "not reachable"
         }
     }
 
