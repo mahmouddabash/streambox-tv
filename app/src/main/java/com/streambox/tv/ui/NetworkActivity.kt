@@ -84,7 +84,13 @@ class NetworkActivity : AppCompatActivity() {
         "Unknown"
     }
 
-    private val dnsNames = arrayOf("Automatic (the TV's own, private DNS if it fails)", "Cloudflare private DNS (1.1.1.1)", "Google private DNS (8.8.8.8)")
+    private val dnsNames get() = Net.dnsChoices.mapIndexed { i, c ->
+        when (i) {
+            Net.DNS_CUSTOM_IP -> if (Prefs.customDns.isNotBlank()) Tr.s("Custom DNS server") + ": " + Prefs.customDns else Tr.s(c.name)
+            Net.DNS_CUSTOM_DOH -> if (Prefs.customDoh.isNotBlank()) Tr.s("Custom private DNS") + ": " + Prefs.customDoh.removePrefix("https://") else Tr.s(c.name)
+            else -> Tr.s(c.name)
+        }
+    }
 
     private fun refresh() {
         val rows = ArrayList<Row>()
@@ -100,7 +106,8 @@ class NetworkActivity : AppCompatActivity() {
                 if (max in 1..used) "   •   ⚠ " + Tr.s("limit reached: another device is watching") else ""))
         }
         rows.add(Row("Speed test", speed) { speedTest() })
-        rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, 2)] + "   •   " + dns) { chooseDns() })
+        rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, Net.dnsChoices.size - 1)] + "   •   " + dns) { chooseDns() })
+        rows.add(Row("Find the fastest DNS", Tr.s("Tests every DNS with your provider's address and lets you pick")) { fastestDns() })
         rows.add(Row("DNS servers", dnsServers))
         rows.add(Row("Provider address (IP)", dnsResult + "   •   " + Tr.s("OK = check again")) { quickChecks() })
         val quota = Prefs.dataQuotaGb
@@ -238,14 +245,52 @@ class NetworkActivity : AppCompatActivity() {
     private fun chooseDns() {
         AlertDialog.Builder(this)
             .setTitle("DNS")
-            .setSingleChoiceItems(dnsNames.map { Tr.s(it) }.toTypedArray(), Prefs.dnsMode.coerceIn(0, 2)) { d, w ->
-                Prefs.dnsMode = w
-                Net.clearDnsCache()
+            .setSingleChoiceItems(dnsNames.toTypedArray(), Prefs.dnsMode.coerceIn(0, Net.dnsChoices.size - 1)) { d, w ->
                 d.dismiss()
-                dns = Tr.s("Checking…")
-                quickChecks()
+                when (w) {
+                    Net.DNS_CUSTOM_IP -> Ui.input(this, Tr.s("DNS server IP address (e.g. 192.168.1.1)"), Prefs.customDns, android.text.InputType.TYPE_CLASS_TEXT) { ip ->
+                        if (!Regex("^\\d{1,3}(\\.\\d{1,3}){3}$").matches(ip.trim())) { toast("That isn't an IP address like 192.168.1.1"); return@input }
+                        Prefs.customDns = ip
+                        applyDns(w)
+                    }
+                    Net.DNS_CUSTOM_DOH -> Ui.input(this, Tr.s("Private DNS address (https://…/dns-query)"), Prefs.customDoh.ifBlank { "https://" }, android.text.InputType.TYPE_CLASS_TEXT) { url ->
+                        if (!url.trim().startsWith("https://") || url.trim().length < 12) { toast("The address must start with https://"); return@input }
+                        Prefs.customDoh = url
+                        applyDns(w)
+                    }
+                    else -> applyDns(w)
+                }
             }
             .show()
+    }
+
+    private fun applyDns(mode: Int) {
+        Prefs.dnsMode = mode
+        Net.clearDnsCache()
+        dns = Tr.s("Checking…")
+        quickChecks()
+    }
+
+    /** Times a lookup of the provider's address with every DNS choice and offers the results, fastest first. */
+    private fun fastestDns() {
+        val host = Repo.profile?.server?.toHttpHostOrNull() ?: "www.google.com"
+        toast("Testing every DNS… (a few seconds)")
+        lifecycleScope.launch {
+            val results = withContext(Dispatchers.IO) {
+                Net.dnsChoices.indices.filter { it != 0 && (it != Net.DNS_CUSTOM_IP || Prefs.customDns.isNotBlank()) &&
+                    (it != Net.DNS_CUSTOM_DOH || Prefs.customDoh.isNotBlank()) }
+                    .map { i -> i to Net.testDns(i, host) }
+            }
+            val sorted = results.sortedBy { it.second ?: Long.MAX_VALUE }
+            val names = dnsNames
+            val labels = sorted.map { (i, ms) -> (if (ms == null) "✕  " + Tr.s("failed") else "$ms ms") + "   •   " + names[i] +
+                if (i == Prefs.dnsMode) "   ✓" else "" }.toTypedArray()
+            AlertDialog.Builder(this@NetworkActivity)
+                .setTitle(Tr.s("Fastest DNS for") + " $host")
+                .setItems(labels) { _, w -> if (sorted[w].second != null) applyDns(sorted[w].first) else toast("That DNS didn't answer") }
+                .setNegativeButton(Tr.s("Close"), null)
+                .show()
+        }
     }
 
     /** Runs everything and writes one plain verdict. */

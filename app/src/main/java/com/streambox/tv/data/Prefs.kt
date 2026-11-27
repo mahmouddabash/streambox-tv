@@ -649,7 +649,7 @@ object Prefs {
         get() = sp.getInt("sortMode", 0)
         set(v) = sp.edit().putInt("sortMode", v).apply()
 
-    /** DNS: 0 automatic (the TV's own, private DNS when it fails), 1 Cloudflare private DNS, 2 Google private DNS. */
+    /** DNS choice: index into [Net.dnsChoices] (0 = automatic). */
     var dnsMode: Int
         get() = sp.getInt("dnsMode", 0)
         set(v) = sp.edit().putInt("dnsMode", v).apply()
@@ -788,6 +788,14 @@ object Prefs {
     var pinLockedUntil: Long
         get() = sp.getLong("pinLocked", 0L)
         set(v) = sp.edit().putLong("pinLocked", v).apply()
+
+    /** Own DNS server IP (DNS choice "Custom DNS server") and own private-DNS address (DoH URL). */
+    var customDns: String
+        get() = sp.getString("customDns", "") ?: ""
+        set(v) = sp.edit().putString("customDns", v.trim()).apply()
+    var customDoh: String
+        get() = sp.getString("customDoh", "") ?: ""
+        set(v) = sp.edit().putString("customDoh", v.trim()).apply()
 
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"

@@ -48,8 +48,59 @@ object Net {
         DnsOverHttps.Builder()
             .client(bootstrap)
             .url(url.toHttpUrl())
-            .bootstrapDnsHosts(ips.map { InetAddress.getByName(it) })
+            .apply { if (ips.isNotEmpty()) bootstrapDnsHosts(ips.map { InetAddress.getByName(it) }) }
             .build()
+
+    /** A DNS choice in Network Center. [doh]: private DNS address; [udp]: plain DNS server. */
+    data class DnsChoice(val name: String, val doh: String = "", val ips: List<String> = emptyList(), val udp: String = "")
+
+    const val DNS_CUSTOM_IP = 9
+    const val DNS_CUSTOM_DOH = 10
+    const val DNS_SYSTEM_ONLY = 11
+
+    /** Order matters: the index is what's saved (0–2 kept from earlier versions). */
+    val dnsChoices = listOf(
+        DnsChoice("Automatic (the TV's own, private DNS if it fails)"),
+        DnsChoice("Cloudflare private DNS (1.1.1.1)", "https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1")),
+        DnsChoice("Google private DNS (8.8.8.8)", "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4")),
+        DnsChoice("Quad9 private DNS (9.9.9.9), blocks harmful sites", "https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112")),
+        DnsChoice("AdGuard private DNS, blocks ads and trackers", "https://dns.adguard-dns.com/dns-query", listOf("94.140.14.14", "94.140.15.15")),
+        DnsChoice("OpenDNS private DNS (Cisco)", "https://doh.opendns.com/dns-query", listOf("208.67.222.222", "208.67.220.220")),
+        DnsChoice("Cloudflare Family, blocks adult and harmful sites", "https://family.cloudflare-dns.com/dns-query", listOf("1.1.1.3", "1.0.0.3")),
+        DnsChoice("AdGuard Family, blocks adult sites and ads", "https://family.adguard-dns.com/dns-query", listOf("94.140.14.15", "94.140.15.16")),
+        DnsChoice("Plain DNS 1.1.1.1 / 8.8.8.8 (not private)", udp = "1.1.1.1"),
+        DnsChoice("Custom DNS server (IP address)…"),
+        DnsChoice("Custom private DNS address (https://…)…"),
+        DnsChoice("The device's own DNS only")
+    )
+
+    private val dohCache = java.util.concurrent.ConcurrentHashMap<String, Dns>()
+
+    private fun dohFor(url: String, ips: List<String>): Dns = dohCache.getOrPut(url + ips) { doh(url, *ips.toTypedArray()) }
+
+    /** One lookup of [host] using DNS choice [index] only (for "Find the fastest DNS"); ms or null. */
+    fun testDns(index: Int, host: String): Long? {
+        val t = System.nanoTime()
+        return try {
+            val r = lookupWith(index, host) ?: return null
+            if (r.isEmpty()) null else (System.nanoTime() - t) / 1_000_000
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Lookup with a fixed DNS choice; null for "automatic". */
+    private fun lookupWith(index: Int, host: String): List<InetAddress>? {
+        val c = dnsChoices.getOrNull(index) ?: return null
+        return when {
+            index == DNS_SYSTEM_ONLY -> Dns.SYSTEM.lookup(host)
+            index == DNS_CUSTOM_IP -> Prefs.customDns.takeIf { it.isNotBlank() }?.let { udpLookup(host, it) }
+            index == DNS_CUSTOM_DOH -> Prefs.customDoh.takeIf { it.startsWith("https://") }?.let { dohFor(it, emptyList()).lookup(host) }
+            c.doh.isNotEmpty() -> dohFor(c.doh, c.ips).lookup(host)
+            c.udp.isNotEmpty() -> try { udpLookup(host, c.udp) } catch (_: Exception) { udpLookup(host, "8.8.8.8") }
+            else -> null
+        }
+    }
 
     private val dohResolvers: List<Dns> by lazy {
         listOf(
@@ -183,11 +234,12 @@ object Net {
             }
             val why = ArrayList<String>()
             // Private DNS chosen in Network Center: ask it first, fall back to the usual order.
-            if (Prefs.dnsMode in 1..2) {
+            if (Prefs.dnsMode == DNS_SYSTEM_ONLY) return Dns.SYSTEM.lookup(hostname)
+            if (Prefs.dnsMode > 0) {
                 try {
-                    dohResolvers[Prefs.dnsMode - 1].lookup(hostname).let { if (it.isNotEmpty()) return it }
+                    lookupWith(Prefs.dnsMode, hostname)?.let { if (it.isNotEmpty()) return it }
                 } catch (e: Exception) {
-                    why.add("private dns: ${e.javaClass.simpleName}")
+                    why.add("chosen dns: ${e.javaClass.simpleName}")
                 }
             }
             val skipSystem = System.currentTimeMillis() - systemFailedAt < TTL
