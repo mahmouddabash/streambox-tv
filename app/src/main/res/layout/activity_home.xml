@@ -182,8 +182,9 @@
             android:id="@+id/rows"
             android:layout_width="match_parent"
             android:layout_height="330dp"
-            android:clipChildren="false"
-            android:clipToPadding="false"
+            android:clipChildren="true"
+            android:clipToPadding="true"
+            android:paddingTop="10dp"
             android:paddingBottom="24dp" />
     </LinearLayout>
 </FrameLayout>
