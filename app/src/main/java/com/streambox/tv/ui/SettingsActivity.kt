@@ -34,12 +34,89 @@ class SettingsActivity : AppCompatActivity() {
             },
             onClick = { r, _ -> r.action() }
         )
-        val list = findViewById<RecyclerView>(R.id.list)
+        list = findViewById(R.id.list)
+        // Search box above the list: finds any setting by name or description.
+        (list.parent as? android.widget.LinearLayout)?.let { parent ->
+            val box = android.widget.EditText(this, null, 0, R.style.Input)
+            box.hint = Tr.s("🔍  Search settings")
+            box.isSingleLine = true
+            box.addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(e: android.text.Editable?) {
+                    query = e?.toString().orEmpty()
+                    refresh()
+                }
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            })
+            parent.addView(box, parent.indexOfChild(list), android.widget.LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = (10 * resources.displayMetrics.density).toInt()
+            })
+        }
+        // Back inside a section returns to the list of sections.
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (section != null && query.isBlank()) {
+                    section = null
+                    refresh()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
         list.layoutManager = LinearLayoutManager(this)
         list.itemAnimator = null
         list.adapter = adapter
         refresh()
     }
+
+    // ---------------------------------------------------------------- Sections and search
+    /** Section shown (null = the list of sections) and the search text. */
+    private var section: String? = null
+    private var query = ""
+
+    private val sections = linkedMapOf(
+        "Playback" to setOf("Stereo sound", "Audio decoding", "Picture mode", "Video quality", "Player", "Audio language", "Subtitles",
+            "Subtitle style", "Subtitle languages (online)", "OpenSubtitles API key", "Even volume", "Match frame rate", "Skip intro",
+            "Resume where I left off", "Picture-in-picture on Home button"),
+        "Live TV" to setOf("Live stream format", "Channel preview in Live TV", "TV guide time shift", "Refresh channel list automatically",
+            "Channel manager", "Channel qualities", "Pause live TV on any channel", "Start with the last channel", "Number buttons", "Time format"),
+        "Movies and series" to setOf("TMDB API key", "Film copies", "Hidden titles", "Clear resume positions"),
+        "Downloads and recording" to setOf("Recording location", "Auto-download next episodes", "Delete watched downloads",
+            "Download speed limit", "Download location"),
+        "Family" to setOf("Viewers", "Parental control", "Viewing stats"),
+        "Network" to setOf("Network Center", "Picture quality and data", "Player identity (User-Agent)", "Phone remote", "Fast start"),
+        "Look" to setOf("Language", "Theme colour", "True-black background", "Light mode for slow devices", "Text size", "Poster size",
+            "Night mode", "Device type"),
+        "App" to emptySet()
+    )
+    private val sectionIcons = mapOf("Playback" to "▶", "Live TV" to "📺", "Movies and series" to "🎬", "Downloads and recording" to "⬇",
+        "Family" to "👪", "Network" to "📶", "Look" to "🎨", "App" to "⚙")
+
+    private fun sectionOf(r: Row) = sections.entries.firstOrNull { r.title in it.value }?.key ?: "App"
+
+    private fun show(rows: List<Row>) {
+        val q = query.trim()
+        val shown = when {
+            q.isNotEmpty() -> rows.filter { r -> listOf(r.title, Tr.s(r.title), r.value, Tr.s(r.value)).any { it.contains(q, ignoreCase = true) } }
+                .ifEmpty { listOf(Row(Tr.s("Nothing found"), "") {}) }
+            section == null -> sections.keys.map { name ->
+                val inIt = rows.filter { sectionOf(it) == name }
+                Row("${sectionIcons[name]}   " + Tr.s(name), inIt.take(4).joinToString(" • ") { Tr.s(it.title) } + if (inIt.size > 4) " …" else "") {
+                    section = name
+                    refresh()
+                    list.scrollToPosition(0)
+                }
+            }
+            else -> listOf(Row("←   " + Tr.s(section!!), Tr.s("Back to all settings")) {
+                section = null
+                refresh()
+            }) + rows.filter { sectionOf(it) == section }
+        }
+        adapter.submit(shown)
+    }
+
+    private lateinit var list: RecyclerView
 
     private fun refresh() {
         val rows = ArrayList<Row>()
@@ -147,22 +224,6 @@ class SettingsActivity : AppCompatActivity() {
             val opts = listOf("" to "Stream default") + PlayerFactory.LANGUAGES
             choose("Audio language", opts.map { it.second }.toTypedArray(), opts.indexOfFirst { it.first == Prefs.audioLanguage }.coerceAtLeast(0)) {
                 Prefs.audioLanguage = opts[it].first
-            }
-        })
-        val subSizes = arrayOf("Small", "Normal", "Large", "Extra large")
-        val subColors = arrayOf("White", "Yellow", "Cyan")
-        val subBgs = arrayOf("Outline", "Dark box", "Shadow")
-        rows.add(Row("Subtitle style", Tr.s(subSizes[Prefs.subtitleSize.coerceIn(0, 3)]) + "   •   " +
-            Tr.s(subColors[Prefs.subtitleColor.coerceIn(0, 2)]) + "   •   " + Tr.s(subBgs[Prefs.subtitleBackground.coerceIn(0, 2)])) {
-            choose("Subtitle size", subSizes, Prefs.subtitleSize.coerceIn(0, 3)) { sz ->
-                Prefs.subtitleSize = sz
-                choose("Subtitle colour", subColors, Prefs.subtitleColor.coerceIn(0, 2)) { c ->
-                    Prefs.subtitleColor = c
-                    choose("Subtitle background", subBgs, Prefs.subtitleBackground.coerceIn(0, 2)) { b ->
-                        Prefs.subtitleBackground = b
-                        refresh()
-                    }
-                }
             }
         })
         val qOpts = arrayOf("Best available", "Up to Full HD", "Up to HD", "SD (saves data)")
@@ -367,7 +428,7 @@ class SettingsActivity : AppCompatActivity() {
             Prefs.clearResumePositions()
             toast("Resume positions cleared")
         })
-        adapter.submit(rows)
+        show(rows)
     }
 
     private fun phoneRemote() {
