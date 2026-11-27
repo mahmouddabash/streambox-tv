@@ -116,6 +116,23 @@ object Net {
     /** Forget remembered addresses (after changing the DNS setting). */
     fun clearDnsCache() = FallbackDns.clear()
 
+    /** Looks up [host] with the current DNS setting: time taken and the addresses found, or null. */
+    fun dnsLookup(host: String): Pair<Long, List<String>>? = try {
+        FallbackDns.clear()
+        val t = System.nanoTime()
+        val list = FallbackDns.lookup(host)
+        ((System.nanoTime() - t) / 1_000_000) to list.mapNotNull { it.hostAddress }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Looks up [host] with the device's own DNS only (to compare with StreamBox's choice). */
+    fun systemLookup(host: String): List<String>? = try {
+        Dns.SYSTEM.lookup(host).mapNotNull { it.hostAddress }
+    } catch (_: Exception) {
+        null
+    }
+
     /** How long one lookup of [host] takes with the current DNS setting, or null when it fails. */
     fun dnsLookupMs(host: String): Long? = try {
         FallbackDns.clear()

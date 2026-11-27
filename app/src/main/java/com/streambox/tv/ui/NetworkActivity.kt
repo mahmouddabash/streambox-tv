@@ -32,6 +32,8 @@ class NetworkActivity : AppCompatActivity() {
     private var internet = "Checking…"
     private var provider = "Checking…"
     private var dns = "Checking…"
+    private var dnsServers = "Checking…"
+    private var dnsResult = "Checking…"
     private var speed = "Press OK to test (about 10 seconds)"
     private var verdict = "Press OK to run every check"
     private var speedMbps = -1.0
@@ -99,6 +101,8 @@ class NetworkActivity : AppCompatActivity() {
         }
         rows.add(Row("Speed test", speed) { speedTest() })
         rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, 2)] + "   •   " + dns) { chooseDns() })
+        rows.add(Row("DNS servers", dnsServers))
+        rows.add(Row("Provider address (IP)", dnsResult + "   •   " + Tr.s("OK = check again")) { quickChecks() })
         val quota = Prefs.dataQuotaGb
         val mob = Prefs.dataUsed(true)
         rows.add(Row("Monthly mobile data limit", if (quota <= 0) Tr.s("None   •   OK = set a limit for mobile data / hotspot") else {
@@ -144,12 +148,37 @@ class NetworkActivity : AppCompatActivity() {
                 else -> "Reachable   •   $providerMs ms" + if (providerMs!! > 600) "   •   " + Tr.s("slow to respond") else ""
             }
             refresh()
+            dnsServers = deviceDnsServers()
             if (host != null) {
-                val ms = withContext(Dispatchers.IO) { Net.dnsLookupMs(host) }
-                dns = ms?.let { "lookup $it ms" } ?: Tr.s("lookup failed")
-                refresh()
+                val r = withContext(Dispatchers.IO) { Net.dnsLookup(host) }
+                val sys = withContext(Dispatchers.IO) { Net.systemLookup(host) }
+                dns = r?.let { "lookup ${it.first} ms" } ?: Tr.s("lookup failed")
+                dnsResult = when {
+                    r == null -> "$host → " + Tr.s("not found")
+                    else -> "$host → " + r.second.take(3).joinToString(", ") +
+                        when {
+                            sys == null -> "   •   " + Tr.s("the device's own DNS couldn't find it")
+                            sys.toSet() != r.second.toSet() && sys.isNotEmpty() -> "   •   " + Tr.s("device DNS says") + " " + sys.take(2).joinToString(", ")
+                            else -> ""
+                        }
+                }
+            } else {
+                dnsResult = Tr.s("No server to check (playlist profile)")
             }
+            refresh()
         }
+    }
+
+    /** DNS servers the device is using now, and Android's Private DNS when it's on. */
+    private fun deviceDnsServers(): String = try {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val lp = cm.getLinkProperties(cm.activeNetwork)
+        val servers = lp?.dnsServers?.mapNotNull { it.hostAddress }?.distinct().orEmpty()
+        val private = if (android.os.Build.VERSION.SDK_INT >= 28 && lp?.isPrivateDnsActive == true)
+            "   •   " + Tr.s("Private DNS") + ": " + (lp.privateDnsServerName ?: Tr.s("automatic")) else ""
+        (if (servers.isEmpty()) Tr.s("Unknown") else servers.joinToString(", ")) + private
+    } catch (_: Exception) {
+        Tr.s("Unknown")
     }
 
     private fun String.toHttpHostOrNull(): String? = try {
