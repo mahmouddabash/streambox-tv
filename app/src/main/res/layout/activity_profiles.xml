@@ -19,6 +19,12 @@
             android:text="Choose a profile" />
 
         <Button
+            android:id="@+id/btnVpn"
+            style="@style/Btn"
+            android:layout_marginEnd="12dp"
+            android:text="🛡  Free VPN" />
+
+        <Button
             android:id="@+id/btnAdd"
             style="@style/Btn"
             android:text="+ Add profile" />

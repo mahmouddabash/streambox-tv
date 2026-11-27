@@ -43,6 +43,7 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var progress: ProgressBar
     private lateinit var nav: List<Button>
     private lateinit var rowsView: RecyclerView
+    private val vpnSwitch = VpnSwitch(this)
     private lateinit var heroA: ImageView
     private lateinit var heroB: ImageView
     private lateinit var heroEyebrow: TextView
@@ -172,6 +173,10 @@ class HomeActivity : AppCompatActivity() {
                 .setItems(tucked.map { Tr.s(it.second) }.toTypedArray()) { _, w -> tucked[w].first.performClick() }
                 .show()
         }
+        val vpnBtn = findViewById<Button>(R.id.tileVpn)
+        fun paintVpn() { vpnBtn.alpha = if (Prefs.vpnOn) 1f else 0.55f }
+        paintVpn()
+        vpnBtn.setOnClickListener { vpnSwitch.toggle { paintVpn(); if (it) load(true) } }
         settings.setOnClickListener { Ui.guardKids(this) { startActivity(Intent(this, SettingsActivity::class.java)) } }
         profiles.setOnClickListener {
             if (!Repo.loaded) { finish(); return@setOnClickListener }
@@ -183,7 +188,7 @@ class HomeActivity : AppCompatActivity() {
                 }
                 .show()
         }
-        for ((b, label) in listOf(search to "Search", multi to "Multi-screen", downloads to "Downloads", rec to "Recordings", refresh to "Refresh content", findViewById<Button>(R.id.tileMore) to "More", settings to "Settings", profiles to "Switch profile")) {
+        for ((b, label) in listOf(search to "Search", multi to "Multi-screen", downloads to "Downloads", rec to "Recordings", refresh to "Refresh content", findViewById<Button>(R.id.tileMore) to "More", vpnBtn to "Free VPN", settings to "Settings", profiles to "Switch profile")) {
             b.contentDescription = label
             b.setOnFocusChangeListener { _, has -> if (has) status.text = label else if (!loading) status.text = "" }
         }

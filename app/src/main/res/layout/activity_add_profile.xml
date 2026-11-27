@@ -98,6 +98,16 @@
                 android:inputType="textUri" />
         </LinearLayout>
 
+        <CheckBox
+            android:id="@+id/useVpn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:buttonTint="@color/gold"
+            android:text="Log in through the free VPN (if your provider blocks your internet)"
+            android:textColor="@color/text"
+            android:textSize="15sp" />
+
         <TextView
             android:id="@+id/status"
             android:layout_width="match_parent"

@@ -15,6 +15,7 @@ import com.streambox.tv.data.Prefs
 import com.streambox.tv.data.Repo
 
 class ProfilesActivity : AppCompatActivity() {
+    private val vpnSwitch = VpnSwitch(this)
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
 
 
@@ -30,6 +31,9 @@ class ProfilesActivity : AppCompatActivity() {
         empty = findViewById(R.id.empty)
         btnAdd = findViewById(R.id.btnAdd)
         btnAdd.setOnClickListener { startActivity(Intent(this, AddProfileActivity::class.java)) }
+        val btnVpn = findViewById<android.widget.Button>(R.id.btnVpn)
+        btnVpn.text = vpnSwitch.label
+        btnVpn.setOnClickListener { vpnSwitch.toggle { btnVpn.text = vpnSwitch.label } }
 
         adapter = SimpleAdapter(
             R.layout.item_two_line,

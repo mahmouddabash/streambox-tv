@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 class AddProfileActivity : AppCompatActivity() {
+    private val vpnSwitch = VpnSwitch(this)
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
 
 
@@ -31,6 +32,7 @@ class AddProfileActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_add_profile)
+        findViewById<android.widget.CheckBox>(R.id.useVpn).isChecked = Prefs.vpnOn
         status = findViewById(R.id.status)
         btnSave = findViewById(R.id.btnSave)
 
@@ -140,6 +142,17 @@ class AddProfileActivity : AppCompatActivity() {
             )
         }
 
+        val wantVpn = findViewById<android.widget.CheckBox>(R.id.useVpn).isChecked
+        if (wantVpn && !Prefs.vpnOn) {
+            btnSave.isEnabled = false
+            status.text = Tr.s("Connecting the free VPN…")
+            vpnSwitch.turnOn { ok ->
+                btnSave.isEnabled = true
+                if (ok) save() else status.text = Tr.s("Free VPN failed") + ": " + com.streambox.tv.data.FreeVpn.lastError
+            }
+            return
+        }
+        if (!wantVpn && Prefs.vpnOn) vpnSwitch.turnOff()
         btnSave.isEnabled = false
         saving = true
         status.text = if (xtream) "Checking login…" else "Saving…"
