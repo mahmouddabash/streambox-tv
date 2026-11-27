@@ -25,7 +25,7 @@ class App : Application(), coil.ImageLoaderFactory {
         Thread {
             try {
                 // Free VPN first (when switched on), so the DNS test below already goes through it.
-                if (Prefs.vpnOn) com.streambox.tv.data.FreeVpn.start(this)
+                if (Prefs.vpnOn) com.streambox.tv.data.FreeVpn.autoStart(this)
                 Thread.sleep(2_500)
                 val all = Prefs.profiles()
                 val p = com.streambox.tv.data.Repo.profile ?: all.firstOrNull { it.id == Prefs.lastProfileId } ?: all.firstOrNull()

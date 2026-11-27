@@ -25,7 +25,12 @@ import java.util.concurrent.TimeUnit
  */
 object FreeVpn {
     private const val WARP_PEER = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
-    private val ENDPOINTS = listOf("162.159.192.1:2408", "162.159.193.1:2408", "162.159.195.1:2408", "engage.cloudflareclient.com:2408")
+    /** Cloudflare WARP entry points (different addresses and ports; some networks block some of them). */
+    val ENDPOINTS = listOf(
+        "162.159.192.1:2408", "162.159.193.1:2408", "162.159.195.1:2408", "engage.cloudflareclient.com:2408",
+        "188.114.96.1:2408", "188.114.97.1:2408", "188.114.98.1:2408", "188.114.99.1:2408",
+        "162.159.192.1:500", "162.159.192.1:1701", "162.159.192.1:4500", "162.159.193.1:854"
+    )
 
     @Volatile private var backend: GoBackend? = null
     @Volatile var state: Tunnel.State = Tunnel.State.DOWN
@@ -73,6 +78,66 @@ object FreeVpn {
         Prefs.vpnEndpoint = (Prefs.vpnEndpoint + 1) % ENDPOINTS.size
         stop(context)
         return start(context)
+    }
+
+    /** Round-trip time through the tunnel right now (best of 2 small requests), or null when it doesn't work. */
+    fun probe(): Long? {
+        val c = OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
+            .callTimeout(7, TimeUnit.SECONDS).build()
+        var best: Long? = null
+        repeat(2) {
+            try {
+                val t = System.nanoTime()
+                c.newCall(Request.Builder().url("https://www.gstatic.com/generate_204").build()).execute().use { r ->
+                    if (r.code == 204 || r.isSuccessful) {
+                        val ms = (System.nanoTime() - t) / 1_000_000
+                        if (best == null || ms < best!!) best = ms
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return best
+    }
+
+    data class EntryResult(val index: Int, val ms: Long?)
+
+    /**
+     * Tries every entry point through the running tunnel and keeps the fastest working one.
+     * Only small test requests are used (nothing is sent to your provider).
+     */
+    fun pickFastest(context: Context, onProgress: (Int, Int) -> Unit = { _, _ -> }): List<EntryResult> {
+        if (!Prefs.vpnOn) return emptyList()
+        val out = ArrayList<EntryResult>()
+        for (i in ENDPOINTS.indices) {
+            onProgress(i + 1, ENDPOINTS.size)
+            Prefs.vpnEndpoint = i
+            val conf = try { config(context) } catch (_: Exception) { null } ?: break
+            val ms = try {
+                backend(context).setState(tunnel, Tunnel.State.UP, conf)
+                Thread.sleep(600) // let the tunnel shake hands
+                probe()
+            } catch (_: Exception) { null }
+            out.add(EntryResult(i, ms))
+        }
+        val best = out.filter { it.ms != null }.minByOrNull { it.ms!! }
+        Prefs.vpnEndpoint = best?.index ?: 0
+        Prefs.vpnPickedAt = System.currentTimeMillis()
+        try { config(context)?.let { backend(context).setState(tunnel, Tunnel.State.UP, it) } } catch (_: Exception) {}
+        state = if (best != null) Tunnel.State.UP else state
+        Net.clearDnsCache()
+        return out.sortedBy { it.ms ?: Long.MAX_VALUE }
+    }
+
+    /**
+     * At app start: connect; if the saved entry point doesn't work, or it's been a day, find the
+     * fastest one again.
+     */
+    fun autoStart(context: Context) {
+        if (!Prefs.vpnOn) return
+        if (!start(context)) return
+        val stale = System.currentTimeMillis() - Prefs.vpnPickedAt > 24 * 3_600_000L
+        if (stale || probe() == null) pickFastest(context)
     }
 
     private fun config(context: Context): Config? {

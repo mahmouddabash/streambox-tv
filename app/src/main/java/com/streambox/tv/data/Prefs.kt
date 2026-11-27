@@ -680,6 +680,9 @@ object Prefs {
     var vpnPeerKey: String
         get() = sp.getString("vpnPeer", "") ?: ""
         set(v) = sp.edit().putString("vpnPeer", v).apply()
+    var vpnPickedAt: Long
+        get() = sp.getLong("vpnPicked", 0L)
+        set(v) = sp.edit().putLong("vpnPicked", v).apply()
     var vpnEndpoint: Int
         get() = sp.getInt("vpnEp", 0)
         set(v) = sp.edit().putInt("vpnEp", v).apply()

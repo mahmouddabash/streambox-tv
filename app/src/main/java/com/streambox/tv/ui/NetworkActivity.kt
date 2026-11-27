@@ -48,6 +48,23 @@ class NetworkActivity : AppCompatActivity() {
         } else startVpn()
     }
 
+    /** Tests every free VPN entry point and switches to the fastest (also done by itself once a day). */
+    private fun fastestVpn() {
+        val vpn = com.streambox.tv.data.FreeVpn
+        toast("Testing every free VPN entry point… (about 20 s)")
+        lifecycleScope.launch {
+            val res = withContext(Dispatchers.IO) { vpn.pickFastest(this@NetworkActivity) }
+            val labels = res.map { (if (it.ms == null) "✕  " + Tr.s("doesn't work here") else "✓ ${it.ms} ms") + "   •   " +
+                vpn.ENDPOINTS[it.index] + if (it.index == Prefs.vpnEndpoint && it.ms != null) "   ★ " + Tr.s("in use") else "" }
+            AlertDialog.Builder(this@NetworkActivity)
+                .setTitle(Tr.s("Free VPN entry points"))
+                .setItems(labels.toTypedArray(), null)
+                .setPositiveButton("OK", null)
+                .show()
+            refresh(); quickChecks()
+        }
+    }
+
     private fun startVpn() {
         toast("Connecting the free VPN…")
         lifecycleScope.launch {
@@ -56,7 +73,7 @@ class NetworkActivity : AppCompatActivity() {
             toast(if (ok) Tr.s("Free VPN on: StreamBox now goes through Cloudflare") else
                 Tr.s("Free VPN failed") + ": " + com.streambox.tv.data.FreeVpn.lastError)
             refresh()
-            if (ok) quickChecks()
+            if (ok) fastestVpn()
         }
     }
 
@@ -145,13 +162,8 @@ class NetworkActivity : AppCompatActivity() {
             Prefs.vpnOn -> Tr.s("Connecting…   •   OK = turn off")
             else -> Tr.s("Off   •   use it when your provider blocks your home internet (HTTP 403)")
         }) { toggleVpn() })
-        if (Prefs.vpnOn) rows.add(Row("Free VPN entry point", Tr.s("OK = try another Cloudflare entry point (if it's slow)")) {
-            lifecycleScope.launch {
-                val ok = withContext(Dispatchers.IO) { vpn.nextEndpoint(this@NetworkActivity) }
-                toast(if (ok) "Switched" else Tr.s("Free VPN failed") + ": " + vpn.lastError)
-                refresh(); quickChecks()
-            }
-        })
+        if (Prefs.vpnOn) rows.add(Row("Free VPN entry point", vpn.ENDPOINTS[Prefs.vpnEndpoint.coerceIn(0, vpn.ENDPOINTS.size - 1)] +
+            "   •   " + Tr.s("OK = test all and use the fastest")) { fastestVpn() })
         rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, Net.dnsChoices.size - 1)] + "   •   " + dns) { chooseDns() })
         rows.add(Row("Find the fastest DNS", Tr.s("Logs in to your provider through every DNS, fastest first")) { fastestDns() })
         rows.add(Row("DNS servers", dnsServers))
