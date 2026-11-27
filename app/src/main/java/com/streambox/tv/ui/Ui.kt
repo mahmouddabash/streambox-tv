@@ -22,7 +22,7 @@ import java.util.Locale
 
 fun Context.toast(msg: String) = Toast.makeText(this, Tr.s(msg), Toast.LENGTH_SHORT).show()
 
-fun ImageView.loadUrl(url: String?) {
+fun ImageView.loadUrl(url: String?, onFail: (() -> Unit)? = null) {
     if (background != null && !clipToOutline) {
         outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
         clipToOutline = true
@@ -34,6 +34,7 @@ fun ImageView.loadUrl(url: String?) {
             crossfade(!com.streambox.tv.data.Prefs.lightMode)
             placeholder(R.drawable.placeholder)
             error(R.drawable.placeholder)
+            if (onFail != null) listener(onError = { _, _ -> onFail() })
         }
     }
 }

@@ -97,6 +97,14 @@ class HomeActivity : AppCompatActivity() {
         heroMeta = findViewById(R.id.heroMeta)
         heroPlot = findViewById(R.id.heroPlot)
         findViewById<TextView>(R.id.profileName).text = p.name
+        // Short screens (car units): when the hero text doesn't fit above the rows it would slide
+        // under the top bar, so drop the least important lines until it fits.
+        findViewById<View>(R.id.hero).addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> v.post { fitHero() } }
+        heroTitle.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { resetHeroFit() }
+        })
 
         val live = findViewById<Button>(R.id.tileLive)
         val movies = findViewById<Button>(R.id.tileMovies)
@@ -489,6 +497,40 @@ class HomeActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ Hero
 
+    private var heroFitStep = 0
+
+    private fun resetHeroFit() {
+        if (heroFitStep == 0) return
+        heroFitStep = 0
+        heroEyebrow.visibility = View.VISIBLE
+        findViewById<View>(R.id.accountInfo).visibility = View.VISIBLE
+        heroPlot.visibility = View.VISIBLE
+        heroPlot.maxLines = 3
+        heroTitle.maxLines = 2
+    }
+
+    private fun fitHero() {
+        val hero = findViewById<android.view.ViewGroup>(R.id.hero) ?: return
+        var need = hero.paddingTop + hero.paddingBottom
+        for (i in 0 until hero.childCount) {
+            val c = hero.getChildAt(i)
+            if (c.visibility == View.GONE) continue
+            val lp = c.layoutParams as android.view.ViewGroup.MarginLayoutParams
+            need += c.measuredHeight + lp.topMargin + lp.bottomMargin
+        }
+        if (need <= hero.height || heroFitStep >= 6) return
+        heroFitStep++
+        when (heroFitStep) {
+            1 -> findViewById<View>(R.id.accountInfo).visibility = View.GONE
+            2 -> heroPlot.maxLines = 2
+            3 -> heroEyebrow.visibility = View.GONE
+            4 -> heroPlot.maxLines = 1
+            5 -> heroTitle.maxLines = 1
+            6 -> heroPlot.visibility = View.GONE
+        }
+        hero.requestLayout()
+    }
+
     private fun setHeroIdle(eyebrow: String, title: String, plot: String) {
         heroEyebrow.text = eyebrow
         heroTitle.text = title
@@ -705,8 +747,9 @@ class HomeActivity : AppCompatActivity() {
                 holder.image.setImageDrawable(null)
                 holder.fallback.visibility = View.VISIBLE
             } else {
-                holder.image.loadUrl(card.image)
                 holder.fallback.visibility = if (isChannel) View.VISIBLE else View.GONE
+                // Poster that fails to load: show the title instead of an empty tile.
+                holder.image.loadUrl(card.image) { if (holder.fallback.text == card.title) holder.fallback.visibility = View.VISIBLE }
             }
             if (!isChannel) {
                 holder.image.setBackgroundResource(if (card.image.isBlank()) R.drawable.placeholder else R.drawable.bg_round_clip)
