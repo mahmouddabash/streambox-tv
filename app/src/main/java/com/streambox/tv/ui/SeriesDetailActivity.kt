@@ -53,8 +53,7 @@ class SeriesDetailActivity : AppCompatActivity() {
         setContentView(R.layout.activity_series_detail)
         btnFav = findViewById(R.id.btnFav)
         intent.getStringExtra(EXTRA_ID)?.let {
-            Ui.addWatchLaterButton(this, btnFav, "s:$it")
-            Ui.addHideButton(this, btnFav, "s:$it")
+            Ui.addMoreButton(this, btnFav, "s:$it", absorbAnchor = true)
         }
         status = findViewById(R.id.status)
 

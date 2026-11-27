@@ -74,10 +74,18 @@
                 android:textColor="#E6F5F7FF"
                 android:textSize="16sp" />
 
-            <LinearLayout
+            <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:scrollbars="none">
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:clipChildren="false"
                 android:orientation="horizontal">
 
@@ -87,6 +95,7 @@
                 <Button android:id="@+id/btnDownload" style="@style/Btn" android:text="⬇  Download" />
                 <Button android:id="@+id/btnFav" style="@style/Btn" android:text="+ My list" />
             </LinearLayout>
+            </HorizontalScrollView>
 
             <TextView
                 android:id="@+id/castTitle"

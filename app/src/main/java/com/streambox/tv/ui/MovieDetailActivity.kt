@@ -19,6 +19,8 @@ class MovieDetailActivity : AppCompatActivity() {
     private lateinit var movie: Movie
     private lateinit var btnResume: Button
     private lateinit var btnFav: Button
+    /** Extra entries for the "⋯ More" menu (other copies, collection). */
+    private val moreExtras = ArrayList<Pair<String, () -> Unit>>()
     private val key: String get() = "vod_${Repo.userKey}_${movie.id}"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,29 +34,22 @@ class MovieDetailActivity : AppCompatActivity() {
         setContentView(R.layout.activity_movie_detail)
         btnResume = findViewById(R.id.btnResume)
         btnFav = findViewById(R.id.btnFav)
-        // Other copies of this film (4K / FHD / HD…): pick which one to play.
+        // Extra actions live in one "⋯ More" menu so the button row always fits.
         m?.let { movie ->
             val copies = Repo.movieCopies(movie)
-            if (copies.size > 1) {
-                val b = Button(this, null, 0, R.style.Btn)
-                b.text = "📀  " + Repo.qualityLabel(Repo.qualityRank(movie.name)) + "   •   " + Tr.s("{} copies").replace("{}", "${copies.size}")
-                b.setOnClickListener {
-                    androidx.appcompat.app.AlertDialog.Builder(this)
-                        .setTitle(Tr.s("Choose a copy"))
-                        .setItems(copies.map { (if (it.id == movie.id) "✓ " else "    ") + Repo.qualityLabel(Repo.qualityRank(it.name)) + "   •   " + it.name }.toTypedArray()) { _, w ->
-                            if (copies[w].id != movie.id) {
-                                startActivity(android.content.Intent(this, MovieDetailActivity::class.java).putExtra(EXTRA_ID, copies[w].id))
-                                finish()
-                            }
+            if (copies.size > 1) moreExtras.add(("📀  " + Repo.qualityLabel(Repo.qualityRank(movie.name)) + "   •   " +
+                Tr.s("{} copies").replace("{}", "${copies.size}")) to {
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle(Tr.s("Choose a copy"))
+                    .setItems(copies.map { (if (it.id == movie.id) "✓ " else "    ") + Repo.qualityLabel(Repo.qualityRank(it.name)) + "   •   " + it.name }.toTypedArray()) { _, w ->
+                        if (copies[w].id != movie.id) {
+                            startActivity(android.content.Intent(this, MovieDetailActivity::class.java).putExtra(EXTRA_ID, copies[w].id))
+                            finish()
                         }
-                        .show()
-                }
-                (btnFav.parent as? android.view.ViewGroup)?.let { p -> p.addView(b, p.indexOfChild(btnFav), android.view.ViewGroup.LayoutParams(btnFav.layoutParams)) }
-            }
-        }
-        intent.getStringExtra(EXTRA_ID)?.let {
-            Ui.addWatchLaterButton(this, btnFav, "m:$it")
-            Ui.addHideButton(this, btnFav, "m:$it")
+                    }
+                    .show()
+            })
+            Ui.addMoreButton(this, btnFav, "m:${movie.id}", extras = { moreExtras.toList() })
         }
         val meta = findViewById<TextView>(R.id.meta)
         val plot = findViewById<TextView>(R.id.plot)
@@ -182,9 +177,7 @@ class MovieDetailActivity : AppCompatActivity() {
                 out.toList()
             }
             if (films.size < 2) return@launch
-            val b = android.widget.Button(this@MovieDetailActivity, null, 0, R.style.Btn)
-            b.text = "🎞  $name (${films.size})"
-            b.setOnClickListener {
+            moreExtras.add("🎞  $name (${films.size})" to {
                 androidx.appcompat.app.AlertDialog.Builder(this@MovieDetailActivity)
                     .setTitle(name)
                     .setItems(films.map { (if (it.id == m.id) "▶ " else "    ") + it.name }.toTypedArray()) { _, w ->
@@ -193,9 +186,7 @@ class MovieDetailActivity : AppCompatActivity() {
                         )
                     }
                     .show()
-            }
-            val parent = btnFav.parent as? android.view.ViewGroup ?: return@launch
-            parent.addView(b, parent.indexOfChild(btnFav) + 1, android.view.ViewGroup.LayoutParams(btnFav.layoutParams))
+            })
         }
     }
 

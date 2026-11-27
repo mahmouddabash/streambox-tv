@@ -408,6 +408,8 @@ object Tr {
         "Stereo sound" to "صوت ستيريو",
         "Video fit" to "ملاءمة الفيديو",
         "Watch later" to "للمشاهدة لاحقًا",
+        "⋯  More" to "⋯  المزيد",
+        "✓  Watch later (remove)" to "✓  للمشاهدة لاحقًا (إزالة)",
         "Choose a copy" to "اختر نسخة",
         "Film copies" to "نسخ الأفلام",
         "True-black background" to "خلفية سوداء بالكامل",

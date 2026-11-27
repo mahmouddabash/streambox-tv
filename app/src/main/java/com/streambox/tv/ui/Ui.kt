@@ -238,6 +238,49 @@ object Ui {
     // ------------------------------------------------------------------ Viewers
 
     /** Runs [action] directly, or after the PIN when a Kids profile is active. */
+    /**
+     * One "⋯ More" button after [anchor] instead of a row of extra buttons: Watch later, Hide and
+     * whatever [extras] holds when it's pressed (other copies, collection…). With [absorbAnchor]
+     * the anchor (My list) moves into the menu too, to save space in narrow columns.
+     */
+    fun addMoreButton(
+        activity: Activity, anchor: android.widget.Button, item: String,
+        extras: () -> List<Pair<String, () -> Unit>> = { emptyList() }, absorbAnchor: Boolean = false
+    ): android.widget.Button? {
+        val parent = anchor.parent as? android.view.ViewGroup ?: return null
+        val b = android.widget.Button(activity, null, 0, com.streambox.tv.R.style.Btn)
+        b.text = Tr.s("⋯  More")
+        b.setOnClickListener {
+            val user = com.streambox.tv.data.Repo.userKey
+            val later = item in com.streambox.tv.data.Prefs.watchLater(user)
+            val opts = ArrayList<Pair<String, () -> Unit>>()
+            if (absorbAnchor) opts.add(anchor.text.toString() to { anchor.performClick() })
+            opts.addAll(extras())
+            opts.add(Tr.s(if (later) "✓  Watch later (remove)" else "🕒  Watch later") to {
+                com.streambox.tv.data.Prefs.setWatchLater(user, item, !later)
+                activity.toast(if (later) "Removed from Watch later" else "Added to Watch later")
+            })
+            opts.add(Tr.s("🚫  Hide") to {
+                android.app.AlertDialog.Builder(activity)
+                    .setTitle(Tr.s("Hide this title?"))
+                    .setMessage(Tr.s("It won't appear in rows, lists or search for this viewer. Undo in Settings → Hidden titles."))
+                    .setPositiveButton(Tr.s("🚫  Hide")) { _, _ ->
+                        com.streambox.tv.data.Prefs.setHidden(user, item, true)
+                        activity.toast("Hidden")
+                        activity.finish()
+                    }
+                    .setNegativeButton(Tr.s("Cancel"), null)
+                    .show()
+            })
+            androidx.appcompat.app.AlertDialog.Builder(activity)
+                .setItems(opts.map { it.first }.toTypedArray()) { _, w -> opts[w].second() }
+                .show()
+        }
+        parent.addView(b, parent.indexOfChild(anchor) + 1, android.view.ViewGroup.LayoutParams(anchor.layoutParams))
+        if (absorbAnchor) anchor.visibility = android.view.View.GONE
+        return b
+    }
+
     /** Adds "Hide" after [anchor]: the title disappears from every row, list and search for this viewer. */
     fun addHideButton(activity: Activity, anchor: android.widget.Button, item: String) {
         val parent = anchor.parent as? android.view.ViewGroup ?: return
