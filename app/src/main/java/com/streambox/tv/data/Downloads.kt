@@ -252,6 +252,13 @@ object Downloads {
         if (all().any { it.status == RUNNING }) {
             mutate { l -> l.map { if (it.status == RUNNING) it.copy(status = QUEUED) else it } }
         }
+        // Watched downloads are deleted after the days chosen in Settings.
+        val days = Prefs.cleanupWatchedDays
+        if (days > 0) {
+            val cutoff = System.currentTimeMillis() - days * 86_400_000L
+            val old = all().filter { it.status == DONE && Prefs.watchedAt(it.key).let { w -> w in 1 until cutoff } }
+            if (old.isNotEmpty()) deleteMany(context, old.map { it.id }.toSet(), cleanLeftovers = false)
+        }
         val hls = all().filter { it.status == FAILED && it.note.startsWith("Your server sends this title as a live stream playlist") }
         if (hls.isNotEmpty()) mutate { l -> l.map { d -> if (hls.any { it.id == d.id }) d.copy(status = QUEUED, note = "", total = 0) else d } }
         if (all().any { it.status == QUEUED || needsIndex(it) }) DownloadService.start(context)
@@ -331,15 +338,21 @@ class DownloadService : Service() {
                         val buf = ByteArray(256 * 1024)
                         var done = start
                         var lastCheck = System.currentTimeMillis()
+                        val t0 = System.nanoTime()
+                        val base0 = done
+                        var counted = done
                         while (true) {
                             val n = input.read(buf)
                             if (n < 0) break
                             out.write(buf, 0, n)
                             done += n
+                            if (Prefs.downloadLimitMbps > 0) throttle(t0, done - base0)
                             Downloads.progress[item.id] = done
                             failures = 0
                             if (System.currentTimeMillis() - lastCheck > 2000) {
                                 lastCheck = System.currentTimeMillis()
+                                Prefs.addDataUsed(done - counted, Net.isMobileData(this@DownloadService))
+                                counted = done
                                 updateNotification(item.title, done, total)
                                 if (Downloads.get(item.id)?.status != Downloads.RUNNING) return
                             }
@@ -395,6 +408,15 @@ class DownloadService : Service() {
             idx.delete()
         } catch (_: Exception) {
         }
+    }
+
+    /** Keeps the average speed under the limit chosen in Settings. */
+    private suspend fun throttle(startNs: Long, bytes: Long) {
+        val mbps = Prefs.downloadLimitMbps
+        if (mbps <= 0) return
+        val needMs = bytes * 8 / (mbps * 1000L)
+        val tookMs = (System.nanoTime() - startNs) / 1_000_000
+        if (needMs > tookMs) delay(needMs - tookMs)
     }
 
     private fun buildIndex(d: Downloads.Item) {
@@ -563,7 +585,9 @@ class DownloadService : Service() {
                     mapLen = file.length()
                 }
                 // Several pieces at once is much faster; if the provider objects, go one at a time.
-                var parallel = PARALLEL
+                var parallel = if (Prefs.downloadLimitMbps > 0) 1 else PARALLEL
+                val started = System.nanoTime()
+                var sent = 0L
                 while (index < segs.size) {
                     val now = Downloads.get(item.id)
                     if (now == null || now.status != Downloads.RUNNING) return // paused or deleted: progress is kept
@@ -598,6 +622,8 @@ class DownloadService : Service() {
                     }
                     out.flush()
                     index += batch.size
+                    sent += results.sumOf { it.size.toLong() }
+                    throttle(started, sent)
                     val len = file.length()
                     side.writeText("$index $len $mapLen")
                     Downloads.progress[item.id] = len

@@ -292,6 +292,28 @@ class SettingsActivity : AppCompatActivity() {
         })
         val dlDirs = com.streambox.tv.data.Downloads.dirs(this)
         val dlNow = com.streambox.tv.data.Downloads.dir(this)
+        rows.add(Row("Auto-download next episodes", if (Prefs.autoDownloadNext == 0) "Off" else "Next ${Prefs.autoDownloadNext} episode(s) while you watch a series   •   Wi-Fi only") {
+            choose("Auto-download next episodes", arrayOf("Off", "Next episode", "Next 2 episodes", "Next 3 episodes"), Prefs.autoDownloadNext.coerceIn(0, 3)) {
+                Prefs.autoDownloadNext = it
+                refresh()
+            }
+        })
+        val cleanOpts = intArrayOf(0, 1, 3, 7, 14)
+        rows.add(Row("Delete watched downloads", if (Prefs.cleanupWatchedDays == 0) "Never" else "${Prefs.cleanupWatchedDays} day(s) after watching to the end") {
+            choose("Delete watched downloads", cleanOpts.map { if (it == 0) "Never" else "After $it day(s)" }.toTypedArray(),
+                cleanOpts.indexOf(Prefs.cleanupWatchedDays).coerceAtLeast(0)) {
+                Prefs.cleanupWatchedDays = cleanOpts[it]
+                refresh()
+            }
+        })
+        val limOpts = intArrayOf(0, 2, 5, 10, 20)
+        rows.add(Row("Download speed limit", if (Prefs.downloadLimitMbps == 0) "No limit" else "${Prefs.downloadLimitMbps} Mbps   •   leaves room for watching") {
+            choose("Download speed limit", limOpts.map { if (it == 0) "No limit" else "$it Mbps" }.toTypedArray(),
+                limOpts.indexOf(Prefs.downloadLimitMbps).coerceAtLeast(0)) {
+                Prefs.downloadLimitMbps = limOpts[it]
+                refresh()
+            }
+        })
         rows.add(Row("Download location", (if (Prefs.downloadStorage <= 0 || dlDirs.size < 2) "TV storage" else "USB / SD card ${Prefs.downloadStorage}") +
             "   •   " + com.streambox.tv.data.Downloads.freeSpace(dlNow) +
             if (dlDirs.size > 1) "   •   ${dlDirs.size} drives found" else "   •   plug in a USB drive to save films there") {

@@ -99,6 +99,21 @@ class NetworkActivity : AppCompatActivity() {
         }
         rows.add(Row("Speed test", speed) { speedTest() })
         rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, 2)] + "   •   " + dns) { chooseDns() })
+        val quota = Prefs.dataQuotaGb
+        val mob = Prefs.dataUsed(true)
+        rows.add(Row("Monthly mobile data limit", if (quota <= 0) Tr.s("None   •   OK = set a limit for mobile data / hotspot") else {
+            val left = (quota * 1_073_741_824L - mob).coerceAtLeast(0)
+            String.format(Locale.US, "%d GB   •   %.0f %% used   •   ", quota, mob * 100.0 / (quota * 1_073_741_824L)) +
+                Tr.s("about {} h of HD left").replace("{}", String.format(Locale.US, "%.1f", left / 1_350_000_000.0))
+        }) {
+            val opts = intArrayOf(0, 5, 10, 20, 30, 50, 100)
+            AlertDialog.Builder(this).setTitle(Tr.s("Monthly mobile data limit"))
+                .setItems(opts.map { if (it == 0) Tr.s("No limit") else "$it GB" }.toTypedArray()) { _, w ->
+                    Prefs.dataQuotaGb = opts[w]
+                    Prefs.quotaAlerted = 0
+                    refresh()
+                }.show()
+        })
         rows.add(Row("Data used this month", "Wi-Fi / cable ${gb(Prefs.dataUsed(false))}   •   mobile / hotspot ${gb(Prefs.dataUsed(true))}   •   OK = reset") {
             AlertDialog.Builder(this).setTitle(Tr.s("Reset this month's data count?"))
                 .setPositiveButton("OK") { _, _ -> Prefs.resetDataUsed(); refresh() }

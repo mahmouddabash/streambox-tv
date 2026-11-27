@@ -45,8 +45,12 @@ class RecordingsActivity : AppCompatActivity() {
                 val size = File(r.file).length()
                 val sizeText = if (size > 0) "   •   ${"%.1f".format(size / 1_048_576.0)} MB" else ""
                 val state = when (r.status) {
-                    Recorder.RECORDING -> "Recording until ${Ui.time(r.endMs)}"
-                    Recorder.SCHEDULED -> "Scheduled"
+                    Recorder.RECORDING -> "Recording until ${Ui.time(r.endMs)}   •   " + Tr.s("press OK to watch while it records")
+                    Recorder.SCHEDULED -> "Scheduled" + when (r.repeat) {
+                        "daily" -> "   •   🔁 " + Tr.s("every day")
+                        "weekly" -> "   •   🔁 " + Tr.s("every week")
+                        else -> ""
+                    }
                     Recorder.DONE -> "Recorded"
                     else -> "Failed"
                 }

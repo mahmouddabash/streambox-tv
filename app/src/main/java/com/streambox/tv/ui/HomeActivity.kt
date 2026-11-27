@@ -214,6 +214,51 @@ class HomeActivity : AppCompatActivity() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
+    /**
+     * Series you follow (My list + those you watch): every 12 h, see whether the provider added
+     * episodes. New ones get a "New episodes" row and a notification.
+     */
+    private fun checkNewEpisodes() {
+        if (Repo.kidsMode || System.currentTimeMillis() - Prefs.lastEpisodeCheck < 12 * 3_600_000L) return
+        Prefs.lastEpisodeCheck = System.currentTimeMillis()
+        lifecycleScope.launch {
+            val followed = (Repo.seriesIn(Repo.CAT_FAV) + Repo.recentSeries(15)).distinctBy { it.id }.take(25)
+            val fresh = ArrayList<Series>()
+            for (s in followed) {
+                val total = try { Repo.episodes(s.id).values.sumOf { it.size } } catch (_: Exception) { continue }
+                if (total <= 0) continue
+                val before = Prefs.episodeCount(s.id)
+                Prefs.setEpisodeCount(s.id, total)
+                if (before in 0 until total) fresh.add(s)
+            }
+            if (fresh.isEmpty()) return@launch
+            Prefs.newEpisodeSeries = Prefs.newEpisodeSeries + fresh.map { it.id }
+            notifyNewEpisodes(fresh)
+            buildRows()
+            restoreFocus()
+        }
+    }
+
+    private fun notifyNewEpisodes(list: List<Series>) {
+        try {
+            val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+            if (android.os.Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(
+                android.app.NotificationChannel("episodes", Tr.s("New episodes"), android.app.NotificationManager.IMPORTANCE_DEFAULT)
+            )
+            val open = android.app.PendingIntent.getActivity(this, 77, Intent(this, SplashActivity::class.java),
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+            @Suppress("DEPRECATION")
+            val b = if (android.os.Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(this, "episodes") else android.app.Notification.Builder(this)
+            nm.notify(7703, b.setSmallIcon(R.drawable.ic_app)
+                .setContentTitle(Tr.s("New episodes"))
+                .setContentText(list.joinToString(", ") { it.name })
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .build())
+        } catch (_: Exception) {
+        }
+    }
+
     /** Trending on TMDB this week that your provider has (needs a TMDB key); loaded once per start. */
     private fun loadTrending() {
         if (!com.streambox.tv.data.Tmdb.enabled || trending != null) return
@@ -311,6 +356,7 @@ class HomeActivity : AppCompatActivity() {
         buildRows()
         showViewerAvatar()
         loadTrending()
+        checkNewEpisodes()
         // Several viewers: ask who's watching once per app start.
         if (!viewerAsked && Prefs.viewers(Repo.profileId).isNotEmpty()) {
             viewerAsked = true
@@ -365,6 +411,9 @@ class HomeActivity : AppCompatActivity() {
         }
         Repo.recentChannelList().takeIf { it.isNotEmpty() }
             ?.let { out.add(Row("Recently watched channels", it.map(::channelCard))) }
+        // Followed series with episodes added since last time.
+        Prefs.newEpisodeSeries.mapNotNull { Repo.seriesItem(it) }.takeIf { it.isNotEmpty() }
+            ?.let { out.add(0, Row("New episodes", it.map { s -> Card(Kind.SERIES, s.id, s.name, s.poster, "🆕") })) }
         // Downloaded films and episodes, one click to watch offline (not for Kids profiles).
         if (!Repo.kidsMode) {
             com.streambox.tv.data.Downloads.all()

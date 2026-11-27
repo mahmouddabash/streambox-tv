@@ -54,7 +54,9 @@ object Recorder {
         val url: String,
         val file: String,
         val status: String,
-        val note: String = ""
+        val note: String = "",
+        /** "" once, "daily" or "weekly": the next one is scheduled when this one ends. */
+        val repeat: String = ""
     )
 
     fun all(): List<Recording> {
@@ -65,7 +67,7 @@ object Recorder {
                 val o = arr.getJSONObject(i)
                 out.add(Recording(o.getString("id"), o.optString("p"), o.optString("c"), o.optString("cn"),
                     o.optString("t"), o.getLong("s"), o.getLong("e"), o.optString("u"), o.optString("f"),
-                    o.optString("st", SCHEDULED), o.optString("n")))
+                    o.optString("st", SCHEDULED), o.optString("n"), o.optString("rp")))
             }
         } catch (_: Exception) {
         }
@@ -78,7 +80,7 @@ object Recorder {
         list.forEach {
             arr.put(JSONObject().put("id", it.id).put("p", it.profileId).put("c", it.channelId).put("cn", it.channelName)
                 .put("t", it.title).put("s", it.startMs).put("e", it.endMs).put("u", it.url).put("f", it.file)
-                .put("st", it.status).put("n", it.note))
+                .put("st", it.status).put("n", it.note).put("rp", it.repeat))
         }
         Prefs.recordingsJson = arr.toString()
     }
@@ -107,15 +109,32 @@ object Recorder {
         return if (c.url.isNotEmpty()) c.url else "${p.server}/live/${p.username}/${p.password}/${c.id}.ts"
     }
 
-    fun schedule(context: Context, c: Channel, title: String, startMs: Long, endMs: Long): Recording {
+    fun schedule(context: Context, c: Channel, title: String, startMs: Long, endMs: Long, repeat: String = ""): Recording {
         val safe = (title.ifBlank { c.name }).replace(Regex("[^\\p{L}\\p{N} ._-]+"), "_").take(60)
         val stamp = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date(startMs))
         val file = File(storageDir(context), "${stamp}_${safe}.ts")
         val r = Recording("rec${System.currentTimeMillis()}", Repo.profileId, c.id, c.name, title.ifBlank { c.name },
-            startMs, endMs, recordUrl(c), file.absolutePath, SCHEDULED)
+            startMs, endMs, recordUrl(c), file.absolutePath, SCHEDULED, repeat = repeat)
         save(all() + r)
         arm(context, r)
         return r
+    }
+
+    /** Repeating recording finished: book the next day's / week's one (same time, same channel). */
+    fun scheduleNext(context: Context, r: Recording) {
+        if (r.repeat.isEmpty()) return
+        val step = if (r.repeat == "weekly") 7 * 86_400_000L else 86_400_000L
+        var s = r.startMs + step
+        var e = r.endMs + step
+        val now = System.currentTimeMillis()
+        while (e <= now) { s += step; e += step }
+        if (all().any { it.channelId == r.channelId && it.startMs == s && it.status == SCHEDULED }) return
+        val safe = r.title.replace(Regex("[^\\p{L}\\p{N} ._-]+"), "_").take(60)
+        val stamp = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date(s))
+        val file = File(storageDir(context), "${stamp}_${safe}.ts")
+        val next = r.copy(id = "rec${System.currentTimeMillis()}", startMs = s, endMs = e, file = file.absolutePath, status = SCHEDULED, note = "")
+        save(all() + next)
+        arm(context, next)
     }
 
     fun delete(context: Context, r: Recording) {
@@ -210,7 +229,8 @@ class RecordingService : Service() {
         try {
             FileOutputStream(file, true).use { out ->
                 val buf = ByteArray(128 * 1024)
-                while (scope.isActive && System.currentTimeMillis() < r.endMs && failures < 30) {
+                // Keep reconnecting until the end time (drops, provider hiccups, Wi-Fi blips).
+                while (scope.isActive && System.currentTimeMillis() < r.endMs) {
                     try {
                         client.newCall(Request.Builder().url(r.url).build()).execute().use { resp ->
                             if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
@@ -224,8 +244,8 @@ class RecordingService : Service() {
                         }
                     } catch (e: Exception) {
                         failures++
-                        Recorder.update(r.id) { it.copy(note = "Reconnecting: ${e.message}") }
-                        delay(3_000)
+                        Recorder.update(r.id) { it.copy(note = "Reconnecting (${failures}): ${e.message}") }
+                        delay((2_000L * failures).coerceAtMost(15_000L))
                     }
                 }
             }
@@ -237,6 +257,7 @@ class RecordingService : Service() {
             it.copy(status = if (ok) Recorder.DONE else Recorder.FAILED,
                 note = if (ok) "" else it.note.ifBlank { "No data received" })
         }
+        Recorder.scheduleNext(this, r)
         jobs.remove(r.id)
         updateNotification()
         finishIfIdle()

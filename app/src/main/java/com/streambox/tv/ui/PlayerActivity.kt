@@ -654,7 +654,9 @@ class PlayerActivity : AppCompatActivity() {
         ) {
             // Monthly data use (Network Center). Local files don't count.
             if (!loadEventInfo.uri.scheme.equals("file", true)) {
-                Prefs.addDataUsed(loadEventInfo.bytesLoaded, com.streambox.tv.data.Net.isMobileData(this@PlayerActivity))
+                val mobile = com.streambox.tv.data.Net.isMobileData(this@PlayerActivity)
+                Prefs.addDataUsed(loadEventInfo.bytesLoaded, mobile)
+                if (mobile) handler.post { checkQuota() }
             }
         }
 
@@ -702,6 +704,39 @@ class PlayerActivity : AppCompatActivity() {
             .setMessage(summary + "\n\n" + findings.joinToString("\n\n"))
             .setPositiveButton("OK", null)
             .setNeutralButton(Tr.s("Network Center")) { _, _ -> startActivity(Intent(this, NetworkActivity::class.java)) }
+            .show()
+    }
+
+    /** While watching a series on Wi-Fi: queue the next episodes for offline viewing (Settings). */
+    private fun autoDownloadNext() {
+        val n = Prefs.autoDownloadNext
+        if (n <= 0 || items.isEmpty() || !current.key.startsWith("ep_") || Repo.kidsMode) return
+        if (com.streambox.tv.data.Net.isMobileData(this)) return
+        val sid = Prefs.episodeSeries(current.key)
+        val poster = Repo.seriesItem(sid)?.poster ?: ""
+        for (k in 1..n) {
+            val next = items.getOrNull(index + k) ?: break
+            if (next.key.isEmpty() || next.url.startsWith("file:")) continue
+            if (com.streambox.tv.data.Downloads.forKey(next.key) == null) {
+                if (sid.isNotEmpty()) Prefs.setEpisodeSeries(next.key, sid)
+                com.streambox.tv.data.Downloads.add(this, next.key, next.title, poster, next.url)
+            }
+        }
+    }
+
+    /** Mobile data / hotspot limit: one alert at 80 % and one at 100 % each month. */
+    private fun checkQuota() {
+        val gb = Prefs.dataQuotaGb
+        if (gb <= 0) return
+        val pct = (Prefs.dataUsed(true) * 100 / (gb * 1_073_741_824L)).toInt()
+        val level = when { pct >= 100 -> 100; pct >= 80 -> 80; else -> 0 }
+        if (level == 0 || level <= Prefs.quotaAlerted) return
+        Prefs.quotaAlerted = level
+        AlertDialog.Builder(this)
+            .setTitle(if (level == 100) Tr.s("Monthly data limit reached") else Tr.s("80 % of your monthly data used"))
+            .setMessage(Tr.s("Mobile data / hotspot this month") + ": " + String.format(java.util.Locale.US, "%.1f of %d GB", Prefs.dataUsed(true) / 1_073_741_824.0, gb) +
+                "\n\n" + Tr.s("Tip: Settings → Picture quality and data → Always save data"))
+            .setPositiveButton("OK", null)
             .show()
     }
 
@@ -917,6 +952,7 @@ class PlayerActivity : AppCompatActivity() {
         retries = 0
         stallReconnects = 0
         triedVariants.clear()
+        autoDownloadNext()
         stopLocalShift()
         subDelayMs = 0L
         playerView.subtitleView?.visibility = View.VISIBLE
@@ -1110,7 +1146,10 @@ class PlayerActivity : AppCompatActivity() {
         val pos = p.currentPosition
         val dur = p.duration
         when {
-            dur != C.TIME_UNSET && Repo.isFinished(pos, dur) -> Prefs.setPosition(item.key, 0L)
+            dur != C.TIME_UNSET && Repo.isFinished(pos, dur) -> {
+                Prefs.setPosition(item.key, 0L)
+                Prefs.setWatchedAt(item.key)
+            }
             pos > 10_000L -> Prefs.setPosition(item.key, pos, if (dur != C.TIME_UNSET) dur else 0L)
         }
     }
@@ -1486,8 +1525,17 @@ class PlayerActivity : AppCompatActivity() {
             AlertDialog.Builder(this@PlayerActivity)
                 .setTitle("⏺  Record ${c.name}")
                 .setItems(options.map { it.first }.toTypedArray()) { _, w ->
-                    Recorder.schedule(this@PlayerActivity, c, pr?.title ?: c.name, System.currentTimeMillis(), options[w].second)
-                    toast("Recording to ${Recorder.storageDir(this@PlayerActivity).absolutePath}")
+                    val start = System.currentTimeMillis()
+                    // Then: once, or repeat at this time every day / week.
+                    val reps = arrayOf("" to Tr.s("Just this once"), "daily" to Tr.s("Every day at this time"), "weekly" to Tr.s("Every week at this time"))
+                    AlertDialog.Builder(this@PlayerActivity)
+                        .setTitle(Tr.s("Repeat?"))
+                        .setItems(reps.map { it.second }.toTypedArray()) { _, r ->
+                            Recorder.schedule(this@PlayerActivity, c, pr?.title ?: c.name, pr?.startMs?.takeIf { reps[r].first.isNotEmpty() } ?: start,
+                                options[w].second, reps[r].first)
+                            toast("Recording to ${Recorder.storageDir(this@PlayerActivity).absolutePath}")
+                        }
+                        .show()
                 }
                 .show()
         }

@@ -667,6 +667,45 @@ object Prefs {
         get() = sp.getBoolean("localPause", true)
         set(v) = sp.edit().putBoolean("localPause", v).apply()
 
+    /** Monthly limit for mobile data / hotspot in GB (0 = none); alerts at 80 % and 100 %. */
+    var dataQuotaGb: Int
+        get() = sp.getInt("dataQuota", 0)
+        set(v) = sp.edit().putInt("dataQuota", v).apply()
+
+    /** Highest quota alert already shown this month (0, 80 or 100). */
+    var quotaAlerted: Int
+        get() = if (sp.getString("quotaMonth", "") == monthKey()) sp.getInt("quotaAlert", 0) else 0
+        set(v) = sp.edit().putString("quotaMonth", monthKey()).putInt("quotaAlert", v).apply()
+
+    /** Download the next N episodes while watching a series (0 = off; Wi-Fi only). */
+    var autoDownloadNext: Int
+        get() = sp.getInt("autoDlNext", 0)
+        set(v) = sp.edit().putInt("autoDlNext", v).apply()
+
+    /** Delete downloads this many days after they were watched to the end (0 = keep). */
+    var cleanupWatchedDays: Int
+        get() = sp.getInt("cleanupDays", 0)
+        set(v) = sp.edit().putInt("cleanupDays", v).apply()
+
+    /** Download speed limit in Mbps (0 = no limit). */
+    var downloadLimitMbps: Int
+        get() = sp.getInt("dlLimit", 0)
+        set(v) = sp.edit().putInt("dlLimit", v).apply()
+
+    /** When a film or episode was watched to the end (for cleanup). */
+    fun watchedAt(key: String): Long = sp.getLong("watched_$key", 0L)
+    fun setWatchedAt(key: String) = sp.edit().putLong("watched_$key", System.currentTimeMillis()).apply()
+
+    /** Episodes seen last time for a followed series, and series that got new ones. */
+    fun episodeCount(seriesId: String): Int = sp.getInt("epc_$seriesId", -1)
+    fun setEpisodeCount(seriesId: String, n: Int) = sp.edit().putInt("epc_$seriesId", n).apply()
+    var newEpisodeSeries: Set<String>
+        get() = sp.getStringSet("newEpSeries", emptySet()) ?: emptySet()
+        set(v) = sp.edit().putStringSet("newEpSeries", v).apply()
+    var lastEpisodeCheck: Long
+        get() = sp.getLong("lastEpCheck", 0L)
+        set(v) = sp.edit().putLong("lastEpCheck", v).apply()
+
     var downloadsJson: String
         get() = sp.getString("downloads", "[]") ?: "[]"
         set(v) = sp.edit().putString("downloads", v).apply()

@@ -42,6 +42,8 @@ class SeriesDetailActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val s = Repo.seriesItem(intent.getStringExtra(EXTRA_ID) ?: "")
+        // Opened: no longer "new".
+        intent.getStringExtra(EXTRA_ID)?.let { id -> if (id in Prefs.newEpisodeSeries) Prefs.newEpisodeSeries = Prefs.newEpisodeSeries - id }
         if (s != null) Prefs.pushRecent("recentSeries_${Repo.userKey}", s.id)
         if (s == null) {
             finish()
