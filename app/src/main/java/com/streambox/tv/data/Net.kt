@@ -97,42 +97,65 @@ object Net {
     /** The DNS actually used: for [DNS_BEST] the winner of the last provider test. */
     fun effectiveDns(): Int = if (Prefs.dnsMode == DNS_BEST) Prefs.bestDns else Prefs.dnsMode
 
-    data class DnsScore(val index: Int, val lookupMs: Long?, val connectMs: Long?) {
+    /** [connectMs] = time to log in to the provider through this DNS; [why] when it failed. */
+    data class DnsScore(val index: Int, val lookupMs: Long?, val connectMs: Long?, val why: String = "") {
         val ok get() = lookupMs != null && connectMs != null
         val total get() = if (ok) lookupMs!! + connectMs!! else Long.MAX_VALUE
     }
 
     /**
-     * Tests every DNS against the provider: looks the address up, then opens a connection to the
-     * address it gave. A DNS that answers fast but with a blocked or wrong address fails the second step.
+     * Tests every DNS with a real login to the provider: looks the address up with that DNS only,
+     * then logs in through it (Xtream: the account check; M3U: the start of the playlist) and checks
+     * the answer is a valid login. A DNS that gives a blocked or wrong address fails here.
      * All run at once, so this takes a few seconds at most.
      */
-    fun scoreDnsFor(server: String): List<DnsScore> {
-        val uri = try { java.net.URI(server.trim()) } catch (_: Exception) { return emptyList() }
-        val host = uri.host ?: return emptyList()
-        val port = if (uri.port > 0) uri.port else if (uri.scheme == "https") 443 else 80
+    fun scoreDnsFor(p: Profile): List<DnsScore> {
+        val loginUrl = if (p.isXtream) {
+            if (p.server.isBlank()) return emptyList()
+            p.server.trimEnd('/') + "/player_api.php?username=" + java.net.URLEncoder.encode(p.username, "UTF-8") +
+                "&password=" + java.net.URLEncoder.encode(p.password, "UTF-8")
+        } else p.m3uUrl.ifBlank { return emptyList() }
         val idx = dnsChoices.indices.filter { it != 0 && it != DNS_BEST &&
             (it != DNS_CUSTOM_IP || Prefs.customDns.isNotBlank()) && (it != DNS_CUSTOM_DOH || Prefs.customDoh.isNotBlank()) }
         val pool = java.util.concurrent.Executors.newFixedThreadPool(idx.size.coerceAtLeast(1))
         return try {
-            idx.map { i ->
-                pool.submit(java.util.concurrent.Callable {
-                    val t = System.nanoTime()
-                    val ips = try { lookupWith(i, host)?.takeIf { it.isNotEmpty() } } catch (_: Exception) { null }
-                    val lookMs = ips?.let { (System.nanoTime() - t) / 1_000_000 }
-                    val conMs = ips?.firstNotNullOfOrNull { ip ->
-                        try {
-                            val c = System.nanoTime()
-                            java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress(ip, port), 4_000) }
-                            (System.nanoTime() - c) / 1_000_000
-                        } catch (_: Exception) { null }
-                    }
-                    DnsScore(i, lookMs, conMs)
-                })
-            }.map { f -> try { f.get(15, TimeUnit.SECONDS) } catch (_: Exception) { null } }.filterNotNull()
+            idx.map { i -> pool.submit(java.util.concurrent.Callable { loginTest(i, loginUrl, p.isXtream) }) }
+                .map { f -> try { f.get(25, TimeUnit.SECONDS) } catch (_: Exception) { null } }.filterNotNull()
                 .sortedBy { it.total }
         } finally {
             pool.shutdownNow()
+        }
+    }
+
+    private fun loginTest(i: Int, url: String, xtream: Boolean): DnsScore {
+        var lookMs: Long? = null
+        val dns = object : Dns {
+            override fun lookup(hostname: String): List<InetAddress> {
+                if (hostname.isNotEmpty() && (hostname[0].isDigit() || hostname.contains(':'))) return Dns.SYSTEM.lookup(hostname)
+                val t = System.nanoTime()
+                val r = lookupWith(i, hostname)?.takeIf { it.isNotEmpty() } ?: throw UnknownHostException("no answer")
+                if (lookMs == null) lookMs = (System.nanoTime() - t) / 1_000_000
+                return r
+            }
+        }
+        val client = bootstrap.newBuilder().dns(dns).connectTimeout(6, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS).build()
+        val t = System.nanoTime()
+        return try {
+            client.newCall(Request.Builder().url(url).header("User-Agent", userAgent()).build()).execute().use { r ->
+                val head = r.body?.source()?.let { src -> src.request(4096); src.buffer.snapshot().utf8().take(4096) } ?: ""
+                val ms = (System.nanoTime() - t) / 1_000_000 - (lookMs ?: 0)
+                val good = r.isSuccessful && if (xtream) Regex("\"auth\"\\s*:\\s*\"?1").containsMatchIn(head) || head.contains("\"user_info\"") && !head.contains("\"auth\":0")
+                    else head.trimStart('\uFEFF', ' ', '\r', '\n').startsWith("#EXTM3U")
+                when {
+                    lookMs == null -> DnsScore(i, null, null, "no answer")
+                    !r.isSuccessful -> DnsScore(i, lookMs, null, "HTTP ${r.code}")
+                    !good -> DnsScore(i, lookMs, null, "login refused")
+                    else -> DnsScore(i, lookMs, ms.coerceAtLeast(1))
+                }
+            }
+        } catch (e: Exception) {
+            DnsScore(i, lookMs, null, if (lookMs == null) "no answer" else if (e is SocketTimeoutException) "timed out" else "not reachable")
         }
     }
 
@@ -140,11 +163,11 @@ object Net {
      * For "Best for my provider": re-tests when it's been 12 hours or the connection type changed
      * (Wi-Fi ↔ mobile data), and switches to the winner. Returns the winner or null.
      */
-    fun autoPickDns(context: android.content.Context, server: String, force: Boolean = false): DnsScore? {
-        if (Prefs.dnsMode != DNS_BEST || server.isBlank()) return null
+    fun autoPickDns(context: android.content.Context, profile: Profile?, force: Boolean = false): DnsScore? {
+        if (Prefs.dnsMode != DNS_BEST || profile == null) return null
         val net = if (isMobileData(context)) "m" else "w"
         if (!force && System.currentTimeMillis() - Prefs.bestDnsAt < 12 * 3_600_000L && Prefs.bestDnsNet == net) return null
-        val best = scoreDnsFor(server).firstOrNull { it.ok } ?: return null
+        val best = scoreDnsFor(profile).firstOrNull { it.ok } ?: return null
         Prefs.bestDns = best.index
         Prefs.bestDnsAt = System.currentTimeMillis()
         Prefs.bestDnsNet = net

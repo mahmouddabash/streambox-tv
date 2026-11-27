@@ -110,7 +110,7 @@ class NetworkActivity : AppCompatActivity() {
         }
         rows.add(Row("Speed test", speed) { speedTest() })
         rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, Net.dnsChoices.size - 1)] + "   •   " + dns) { chooseDns() })
-        rows.add(Row("Find the fastest DNS", Tr.s("Tests every DNS with your provider: lookup + real connection, fastest first")) { fastestDns() })
+        rows.add(Row("Find the fastest DNS", Tr.s("Logs in to your provider through every DNS, fastest first")) { fastestDns() })
         rows.add(Row("DNS servers", dnsServers))
         rows.add(Row("Provider address (IP)", dnsResult + "   •   " + Tr.s("OK = check again")) { quickChecks() })
         val quota = Prefs.dataQuotaGb
@@ -280,11 +280,11 @@ class NetworkActivity : AppCompatActivity() {
      * fastest first. With "Best for my provider" the winner is switched on by itself.
      */
     private fun fastestDns() {
-        val server = Repo.profile?.server ?: ""
-        val host = server.toHttpHostOrNull() ?: return toast("Add a provider first")
-        toast("Testing every DNS with your provider… (a few seconds)")
+        val prof = Repo.profile ?: return toast("Add a provider first")
+        val host = (if (prof.isXtream) prof.server else prof.m3uUrl).toHttpHostOrNull() ?: return toast("Add a provider first")
+        toast("Logging in to your provider with every DNS… (a few seconds)")
         lifecycleScope.launch {
-            val sorted = withContext(Dispatchers.IO) { Net.scoreDnsFor(server) }
+            val sorted = withContext(Dispatchers.IO) { Net.scoreDnsFor(prof) }
             val names = dnsNames
             val winner = sorted.firstOrNull { it.ok }
             if (Prefs.dnsMode == Net.DNS_BEST && winner != null) {
@@ -294,13 +294,13 @@ class NetworkActivity : AppCompatActivity() {
                 Net.clearDnsCache()
             }
             val labels = sorted.map { r ->
-                (if (!r.ok) "✕  " + Tr.s(if (r.lookupMs == null) "no answer" else "address not reachable")
-                else "${r.total} ms") + "   •   " + names[r.index] +
+                (if (!r.ok) "✕  " + Tr.s(r.why.ifEmpty { "failed" })
+                else "✓ " + Tr.s("login") + " ${r.total} ms") + "   •   " + names[r.index] +
                     (if (r == winner) "   ★ " + Tr.s("best") else "") + if (r.index == Net.effectiveDns()) "   ✓" else ""
             }.toTypedArray()
             AlertDialog.Builder(this@NetworkActivity)
-                .setTitle(Tr.s("DNS test with") + " $host")
-                .setItems(labels) { _, w -> if (sorted[w].ok) applyDns(sorted[w].index) else toast("That DNS can't reach your provider") }
+                .setTitle(Tr.s("Login test with") + " $host")
+                .setItems(labels) { _, w -> if (sorted[w].ok) applyDns(sorted[w].index) else toast("Login through that DNS failed") }
                 .setPositiveButton(Tr.s("Use the best automatically")) { _, _ -> Prefs.dnsMode = Net.DNS_BEST
                     winner?.let { Prefs.bestDns = it.index; Prefs.bestDnsAt = System.currentTimeMillis() }
                     Net.clearDnsCache(); quickChecks() }

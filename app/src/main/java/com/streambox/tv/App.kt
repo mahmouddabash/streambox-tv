@@ -25,8 +25,9 @@ class App : Application(), coil.ImageLoaderFactory {
         Thread {
             try {
                 Thread.sleep(2_500)
-                val server = com.streambox.tv.data.Repo.profile?.server ?: Prefs.profiles().firstOrNull()?.server ?: ""
-                com.streambox.tv.data.Net.autoPickDns(this, server)
+                val all = Prefs.profiles()
+                val p = com.streambox.tv.data.Repo.profile ?: all.firstOrNull { it.id == Prefs.lastProfileId } ?: all.firstOrNull()
+                com.streambox.tv.data.Net.autoPickDns(this, p)
             } catch (_: Throwable) {
             }
         }.apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
