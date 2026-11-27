@@ -88,6 +88,11 @@ class SearchActivity : AppCompatActivity() {
         status.text = "Type, or press the mic and speak"
         val preset = intent.getStringExtra(EXTRA_QUERY)
         when {
+            !preset.isNullOrBlank() && intent.getBooleanExtra(EXTRA_ACTOR, false) -> {
+                query.setText(preset)
+                job?.cancel()
+                actorSearch(preset, intent.getStringExtra(EXTRA_PERSON) ?: "")
+            }
             !preset.isNullOrBlank() -> {
                 // From the phone remote: "play …" starts a channel, anything else is searched.
                 if (!playByVoice(preset)) {
@@ -206,6 +211,44 @@ class SearchActivity : AppCompatActivity() {
                     if (out.isEmpty()) status.text = "Press ▼ to browse the results"
                 }
             }
+        }
+    }
+
+    /** Pressed an actor/actress: their films and series at your provider, found straight away. */
+    private fun actorSearch(name: String, personId: String) {
+        status.text = Tr.s("Finding films and series with {}…").replace("{}", name)
+        rows = emptyList()
+        rowsView.adapter?.notifyDataSetChanged()
+        rowsView.requestFocus()
+        job = lifecycleScope.launch {
+            val out = ArrayList<Pair<String, List<Any>>>()
+            val credits = if (com.streambox.tv.data.Tmdb.enabled) com.streambox.tv.data.Tmdb.personCredits(name, personId) else null
+            if (credits != null) {
+                val (mv, sr) = withContext(Dispatchers.Default) {
+                    fun key(n: String) = norm(com.streambox.tv.data.Tmdb.cleanTitle(n).first)
+                    val wantMovies = credits.titles.filter { it.second }.map { norm(it.first) }.filter { it.length >= 2 }.toHashSet()
+                    val wantSeries = credits.titles.filter { !it.second }.map { norm(it.first) }.filter { it.length >= 2 }.toHashSet()
+                    val m = Repo.collapseMovies(Repo.moviesIn(Repo.CAT_ALL).filter { key(it.name) in wantMovies })
+                    val s = Repo.seriesIn(Repo.CAT_ALL).filter { key(it.name) in wantSeries }
+                    // Same order as TMDB (most popular first)
+                    val rank = credits.titles.mapIndexed { i, t -> norm(t.first) to i }.toMap()
+                    m.sortedBy { rank[key(it.name)] ?: Int.MAX_VALUE }.take(80) to s.sortedBy { rank[key(it.name)] ?: Int.MAX_VALUE }.take(80)
+                }
+                if (mv.isNotEmpty()) out.add("🎬 " + Tr.s("Movies") + " (${mv.size})" to mv)
+                if (sr.isNotEmpty()) out.add("📺 " + Tr.s("Series") + " (${sr.size})" to sr)
+            }
+            // Series whose cast line (from the provider) names them.
+            val words = norm(name).split(' ').filter { it.isNotEmpty() }
+            val byCast = withContext(Dispatchers.Default) {
+                val seen = out.flatMap { it.second }.toSet()
+                Repo.seriesIn(Repo.CAT_ALL).filter { s -> s.cast.isNotBlank() && norm(s.cast).let { c -> words.all { c.contains(it) } } && s !in seen }.take(60)
+            }
+            if (byCast.isNotEmpty()) out.add("🎭 " + Tr.s("More series with {}").replace("{}", name) + " (${byCast.size})" to byCast)
+            rows = out
+            rowsView.adapter?.notifyDataSetChanged()
+            status.text = if (out.isEmpty()) Tr.s("No films or series with {} at your provider").replace("{}", name)
+                else "🎭 " + (credits?.name ?: name)
+            if (out.isNotEmpty()) rowsView.post { rowsView.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus() ?: rowsView.requestFocus() }
         }
     }
 
@@ -387,5 +430,6 @@ class SearchActivity : AppCompatActivity() {
         const val EXTRA_QUERY = "query"
         /** Query is an actor/actress name: show their films and series first. */
         const val EXTRA_ACTOR = "actor"
+        const val EXTRA_PERSON = "person"
     }
 }

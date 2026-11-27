@@ -140,7 +140,7 @@ class MovieDetailActivity : AppCompatActivity() {
                 v.findViewById<TextView>(R.id.name).text = p.name
                 v.findViewById<TextView>(R.id.role).text = p.role
             },
-            onClick = { p, _ -> Ui.openActor(this, p.name) }
+            onClick = { p, _ -> Ui.openActor(this, p.name, p.id) }
         ).also { a -> a.submit(cast) }
     }
 

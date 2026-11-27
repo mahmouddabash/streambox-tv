@@ -262,9 +262,10 @@ object Ui {
      * the anchor (My list) moves into the menu too, to save space in narrow columns.
      */
     /** Films and series with this actor/actress that your provider has (search page in actor mode). */
-    fun openActor(activity: Activity, name: String) {
+    fun openActor(activity: Activity, name: String, personId: String = "") {
         activity.startActivity(android.content.Intent(activity, SearchActivity::class.java)
-            .putExtra(SearchActivity.EXTRA_QUERY, name).putExtra(SearchActivity.EXTRA_ACTOR, true))
+            .putExtra(SearchActivity.EXTRA_QUERY, name).putExtra(SearchActivity.EXTRA_ACTOR, true)
+            .putExtra(SearchActivity.EXTRA_PERSON, personId))
     }
 
     fun addMoreButton(

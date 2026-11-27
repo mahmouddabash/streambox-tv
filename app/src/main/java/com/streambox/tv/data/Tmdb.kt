@@ -11,7 +11,7 @@ import org.json.JSONObject
  * HD backdrops, cast with photos and trailers when the provider has none.
  */
 object Tmdb {
-    data class Person(val name: String, val role: String, val photo: String)
+    data class Person(val name: String, val role: String, val photo: String, val id: String = "")
     data class Details(
         val backdrop: String = "",
         val overview: String = "",
@@ -68,7 +68,7 @@ object Tmdb {
                     val c = arr.optJSONObject(i) ?: continue
                     val photo = c.optString("profile_path", "")
                     cast.add(Person(c.optString("name"), c.optString("character"),
-                        if (photo.isNotBlank() && photo != "null") "${IMG}w185$photo" else ""))
+                        if (photo.isNotBlank() && photo != "null") "${IMG}w185$photo" else "", c.optString("id")))
                 }
             }
             var trailer = ""
@@ -139,14 +139,17 @@ object Tmdb {
     /** An actor found by name, with the titles they appear in (title, isMovie). */
     data class Credits(val name: String, val photo: String, val titles: List<Pair<String, Boolean>>)
 
-    /** Searches TMDB for a person and returns their film and TV titles (most popular first). */
-    suspend fun personCredits(query: String): Credits? = withContext(Dispatchers.IO) {
-        if (!enabled || query.isBlank()) return@withContext null
+    /** Searches TMDB for a person and returns their film and TV titles (most popular first). [personId]: exact person (from a cast list). */
+    suspend fun personCredits(query: String, personId: String = ""): Credits? = withContext(Dispatchers.IO) {
+        if (!enabled || (query.isBlank() && personId.isBlank())) return@withContext null
         try {
-            val s = "https://api.themoviedb.org/3/search/person".toHttpUrl().newBuilder()
-                .addQueryParameter("api_key", Prefs.tmdbKey).addQueryParameter("query", query).build()
-            val p = JSONObject(get(s.toString())).optJSONArray("results")?.optJSONObject(0) ?: return@withContext null
-            if (p.optString("known_for_department") != "Acting" && p.optDouble("popularity", 0.0) < 1.0) return@withContext null
+            val p = if (personId.isNotBlank()) JSONObject().put("id", personId).put("name", query) else {
+                val s = "https://api.themoviedb.org/3/search/person".toHttpUrl().newBuilder()
+                    .addQueryParameter("api_key", Prefs.tmdbKey).addQueryParameter("query", query).build()
+                val found = JSONObject(get(s.toString())).optJSONArray("results")?.optJSONObject(0) ?: return@withContext null
+                if (found.optString("known_for_department") != "Acting" && found.optDouble("popularity", 0.0) < 1.0) return@withContext null
+                found
+            }
             val id = p.optString("id")
             val c = "https://api.themoviedb.org/3/person/$id/combined_credits".toHttpUrl().newBuilder()
                 .addQueryParameter("api_key", Prefs.tmdbKey).build()
