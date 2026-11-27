@@ -74,7 +74,24 @@ object Net {
         DnsChoice("Custom DNS server (IP address)…"),
         DnsChoice("Custom private DNS address (https://…)…"),
         DnsChoice("The device's own DNS only"),
-        DnsChoice("Best for my provider (tested automatically)")
+        DnsChoice("Best for my provider (tested automatically)"),
+        // Added later: kept after index 12 so saved choices don't move.
+        DnsChoice("Quad9 private DNS, no filtering (9.9.9.10)", "https://dns10.quad9.net/dns-query", listOf("9.9.9.10", "149.112.112.10")),
+        DnsChoice("AdGuard private DNS, no filtering", "https://unfiltered.adguard-dns.com/dns-query", listOf("94.140.14.140", "94.140.14.141")),
+        DnsChoice("Cloudflare Security, blocks harmful sites (1.1.1.2)", "https://security.cloudflare-dns.com/dns-query", listOf("1.1.1.2", "1.0.0.2")),
+        DnsChoice("Mullvad private DNS (194.242.2.2)", "https://dns.mullvad.net/dns-query", listOf("194.242.2.2")),
+        DnsChoice("Mullvad private DNS, blocks ads", "https://adblock.dns.mullvad.net/dns-query", listOf("194.242.2.3")),
+        DnsChoice("Control D private DNS (76.76.2.0)", "https://freedns.controld.com/p0", listOf("76.76.2.0", "76.76.10.0")),
+        DnsChoice("NextDNS private DNS", "https://dns.nextdns.io/dns-query", listOf("45.90.28.0", "45.90.30.0")),
+        DnsChoice("DNS.SB private DNS (185.222.222.222)", "https://doh.dns.sb/dns-query", listOf("185.222.222.222", "45.11.45.11")),
+        DnsChoice("CleanBrowsing Security private DNS", "https://doh.cleanbrowsing.org/doh/security-filter/", listOf("185.228.168.9", "185.228.169.9")),
+        DnsChoice("Yandex private DNS (77.88.8.8)", "https://common.dot.dns.yandex.net/dns-query", listOf("77.88.8.8", "77.88.8.1")),
+        DnsChoice("AliDNS private DNS (223.5.5.5)", "https://dns.alidns.com/dns-query", listOf("223.5.5.5", "223.6.6.6")),
+        DnsChoice("Plain DNS Google 8.8.8.8 (not private)", udp = "8.8.8.8"),
+        DnsChoice("Plain DNS Quad9 9.9.9.9 (not private)", udp = "9.9.9.9"),
+        DnsChoice("Plain DNS Level3 4.2.2.2 (not private)", udp = "4.2.2.2"),
+        DnsChoice("Plain DNS OpenDNS 208.67.222.222 (not private)", udp = "208.67.222.222"),
+        DnsChoice("Plain DNS AdGuard 94.140.14.140 (not private)", udp = "94.140.14.140")
     )
 
     /** The DNS actually used: for [DNS_BEST] the winner of the last provider test. */
@@ -158,7 +175,7 @@ object Net {
             index == DNS_CUSTOM_IP -> Prefs.customDns.takeIf { it.isNotBlank() }?.let { udpLookup(host, it) }
             index == DNS_CUSTOM_DOH -> Prefs.customDoh.takeIf { it.startsWith("https://") }?.let { dohFor(it, emptyList()).lookup(host) }
             c.doh.isNotEmpty() -> dohFor(c.doh, c.ips).lookup(host)
-            c.udp.isNotEmpty() -> try { udpLookup(host, c.udp) } catch (_: Exception) { udpLookup(host, "8.8.8.8") }
+            c.udp.isNotEmpty() -> if (index == 8) try { udpLookup(host, c.udp) } catch (_: Exception) { udpLookup(host, "8.8.8.8") } else udpLookup(host, c.udp)
             else -> null
         }
     }
