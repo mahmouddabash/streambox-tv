@@ -55,7 +55,13 @@ object FreeVpn {
         return try {
             if (permissionIntent(context) != null) { lastError = "VPN permission not given"; return false }
             val conf = config(context) ?: return false
-            backend(context).setState(tunnel, Tunnel.State.UP, conf)
+            try {
+                backend(context).setState(tunnel, Tunnel.State.UP, conf)
+            } catch (e: Exception) {
+                lastError = "tunnel didn't start: " + (e.message ?: e.javaClass.simpleName)
+                state = Tunnel.State.DOWN
+                return false
+            }
             state = Tunnel.State.UP
             lastError = ""
             Net.clearDnsCache()
@@ -125,7 +131,7 @@ object FreeVpn {
             // No entry point works on this network: never leave a dead tunnel (it would block the whole app).
             stop(context)
             Prefs.vpnOn = false
-            lastError = "no entry point works on this network"
+            lastError = "connected, but no Cloudflare entry point answers on this network (" + out.size + " tried)"
             return out
         }
         Prefs.vpnEndpoint = best.index

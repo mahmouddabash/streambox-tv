@@ -160,6 +160,7 @@ class NetworkActivity : AppCompatActivity() {
         rows.add(Row("Free VPN (Cloudflare WARP)", when {
             Prefs.vpnOn && vpn.isUp -> Tr.s("On   •   only StreamBox goes through it   •   OK = turn off")
             Prefs.vpnOn -> Tr.s("Connecting…   •   OK = turn off")
+            vpn.lastError.isNotEmpty() -> Tr.s("Off") + "   •   " + Tr.s("last problem") + ": " + Tr.s(vpn.lastError)
             else -> Tr.s("Off   •   use it when your provider blocks your home internet (HTTP 403)")
         }) { toggleVpn() })
         if (Prefs.vpnOn) rows.add(Row("Free VPN entry point", vpn.ENDPOINTS[Prefs.vpnEndpoint.coerceIn(0, vpn.ENDPOINTS.size - 1)] +

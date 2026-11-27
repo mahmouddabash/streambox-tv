@@ -756,6 +756,8 @@ object Tr {
         "This channel can't go back" to "لا يمكن الرجوع في هذه القناة",
         "Back to live in the menu" to "العودة للبث المباشر من القائمة",
         "Skip intro" to "تخطي المقدمة",
+        "last problem" to "آخر مشكلة",
+        "Off" to "متوقف",
         "🎭  Cast" to "🎭  طاقم التمثيل",
         "🛡  Free VPN: on" to "🛡  VPN مجاني: مفعّل",
         "🛡  Free VPN: off" to "🛡  VPN مجاني: متوقف",
