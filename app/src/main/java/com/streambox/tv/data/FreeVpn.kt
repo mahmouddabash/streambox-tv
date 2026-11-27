@@ -81,11 +81,11 @@ object FreeVpn {
     }
 
     /** Round-trip time through the tunnel right now (best of 2 small requests), or null when it doesn't work. */
-    fun probe(): Long? {
-        val c = OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
-            .callTimeout(7, TimeUnit.SECONDS).build()
+    fun probe(seconds: Long = 5, tries: Int = 2): Long? {
+        val c = OkHttpClient.Builder().connectTimeout(seconds, TimeUnit.SECONDS).readTimeout(seconds, TimeUnit.SECONDS)
+            .callTimeout(seconds + 1, TimeUnit.SECONDS).build()
         var best: Long? = null
-        repeat(2) {
+        repeat(tries) {
             try {
                 val t = System.nanoTime()
                 c.newCall(Request.Builder().url("https://www.gstatic.com/generate_204").build()).execute().use { r ->
@@ -115,16 +115,23 @@ object FreeVpn {
             val conf = try { config(context) } catch (_: Exception) { null } ?: break
             val ms = try {
                 backend(context).setState(tunnel, Tunnel.State.UP, conf)
-                Thread.sleep(600) // let the tunnel shake hands
-                probe()
+                Thread.sleep(400) // let the tunnel shake hands
+                probe(seconds = 3, tries = 1)
             } catch (_: Exception) { null }
             out.add(EntryResult(i, ms))
         }
         val best = out.filter { it.ms != null }.minByOrNull { it.ms!! }
-        Prefs.vpnEndpoint = best?.index ?: 0
+        if (best == null) {
+            // No entry point works on this network: never leave a dead tunnel (it would block the whole app).
+            stop(context)
+            Prefs.vpnOn = false
+            lastError = "no entry point works on this network"
+            return out
+        }
+        Prefs.vpnEndpoint = best.index
         Prefs.vpnPickedAt = System.currentTimeMillis()
         try { config(context)?.let { backend(context).setState(tunnel, Tunnel.State.UP, it) } } catch (_: Exception) {}
-        state = if (best != null) Tunnel.State.UP else state
+        state = Tunnel.State.UP
         Net.clearDnsCache()
         return out.sortedBy { it.ms ?: Long.MAX_VALUE }
     }
@@ -134,11 +141,20 @@ object FreeVpn {
      * fastest one again.
      */
     fun autoStart(context: Context) {
-        if (!Prefs.vpnOn) return
-        if (!start(context)) return
-        val stale = System.currentTimeMillis() - Prefs.vpnPickedAt > 24 * 3_600_000L
-        if (stale || probe() == null) pickFastest(context)
+        try {
+            if (!Prefs.vpnOn) return
+            if (!start(context)) { Prefs.vpnOn = false; return }
+            // Only when the saved entry point doesn't answer: re-testing every start interrupted loading.
+            if (probe(seconds = 4, tries = 1) == null) pickFastest(context)
+        } finally {
+            ready.countDown()
+        }
     }
+
+    private val ready = java.util.concurrent.CountDownLatch(1)
+
+    /** Waits (up to [ms]) until the VPN started at app start is ready, so the first logins don't fail. */
+    fun awaitStart(ms: Long) { try { ready.await(ms, TimeUnit.MILLISECONDS) } catch (_: Exception) {} }
 
     private fun config(context: Context): Config? {
         if (Prefs.vpnPrivateKey.isBlank() || Prefs.vpnAddress4.isBlank()) {

@@ -42,7 +42,7 @@ class VpnSwitch(private val a: AppCompatActivity) {
         Prefs.vpnOn = true
         a.lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
-                FreeVpn.start(a) && (FreeVpn.probe() != null || FreeVpn.pickFastest(a).any { it.ms != null })
+                FreeVpn.start(a) && (FreeVpn.probe(seconds = 4, tries = 1) != null || FreeVpn.pickFastest(a).any { it.ms != null })
             }
             Prefs.vpnOn = ok
             if (!ok) withContext(Dispatchers.IO) { FreeVpn.stop(a) }

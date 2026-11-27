@@ -15,6 +15,7 @@ import com.streambox.tv.data.Prefs
 
 /** Short animated brand intro, then the profile picker (which opens the last profile on its own). */
 class SplashActivity : AppCompatActivity() {
+    private var vpnWaited = false
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
 
 
@@ -77,6 +78,15 @@ class SplashActivity : AppCompatActivity() {
                 done = false
                 next()
             }
+            return
+        }
+        // With the free VPN on, give it a moment to connect first so the first login goes through it.
+        if (Prefs.vpnOn && !vpnWaited) {
+            vpnWaited = true
+            Thread {
+                com.streambox.tv.data.FreeVpn.awaitStart(8_000)
+                runOnUiThread { next() }
+            }.start()
             return
         }
         done = true

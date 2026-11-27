@@ -73,7 +73,7 @@ class NetworkActivity : AppCompatActivity() {
             toast(if (ok) Tr.s("Free VPN on: StreamBox now goes through Cloudflare") else
                 Tr.s("Free VPN failed") + ": " + com.streambox.tv.data.FreeVpn.lastError)
             refresh()
-            if (ok) fastestVpn()
+            if (ok) quickChecks()
         }
     }
 
