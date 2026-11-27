@@ -200,7 +200,8 @@ class SearchActivity : AppCompatActivity() {
                     list.toList()
                 }
                 if (found.isNotEmpty()) {
-                    rows = rows + ("🎭 ${credits.name} (${found.size})" to found)
+                    val row = "🎭 ${credits.name} (${found.size})" to found
+                    rows = if (intent.getBooleanExtra(EXTRA_ACTOR, false)) listOf(row) + rows else rows + row
                     rowsView.adapter?.notifyDataSetChanged()
                     if (out.isEmpty()) status.text = "Press ▼ to browse the results"
                 }
@@ -384,5 +385,7 @@ class SearchActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_VOICE = "voice"
         const val EXTRA_QUERY = "query"
+        /** Query is an actor/actress name: show their films and series first. */
+        const val EXTRA_ACTOR = "actor"
     }
 }

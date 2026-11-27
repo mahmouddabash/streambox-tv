@@ -139,7 +139,8 @@ class MovieDetailActivity : AppCompatActivity() {
                 if (p.photo.isNotBlank()) img.loadUrl(p.photo) else img.setImageDrawable(null)
                 v.findViewById<TextView>(R.id.name).text = p.name
                 v.findViewById<TextView>(R.id.role).text = p.role
-            }
+            },
+            onClick = { p, _ -> Ui.openActor(this, p.name) }
         ).also { a -> a.submit(cast) }
     }
 

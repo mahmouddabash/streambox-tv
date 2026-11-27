@@ -261,6 +261,12 @@ object Ui {
      * whatever [extras] holds when it's pressed (other copies, collection…). With [absorbAnchor]
      * the anchor (My list) moves into the menu too, to save space in narrow columns.
      */
+    /** Films and series with this actor/actress that your provider has (search page in actor mode). */
+    fun openActor(activity: Activity, name: String) {
+        activity.startActivity(android.content.Intent(activity, SearchActivity::class.java)
+            .putExtra(SearchActivity.EXTRA_QUERY, name).putExtra(SearchActivity.EXTRA_ACTOR, true))
+    }
+
     fun addMoreButton(
         activity: Activity, anchor: android.widget.Button, item: String,
         extras: () -> List<Pair<String, () -> Unit>> = { emptyList() }, absorbAnchor: Boolean = false

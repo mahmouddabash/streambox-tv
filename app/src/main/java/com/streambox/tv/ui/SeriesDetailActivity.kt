@@ -18,6 +18,7 @@ import com.streambox.tv.data.Series
 import kotlinx.coroutines.launch
 
 class SeriesDetailActivity : AppCompatActivity() {
+    private var seriesCast: List<String> = emptyList()
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(zoomed(newBase))
 
 
@@ -55,7 +56,16 @@ class SeriesDetailActivity : AppCompatActivity() {
         setContentView(R.layout.activity_series_detail)
         btnFav = findViewById(R.id.btnFav)
         intent.getStringExtra(EXTRA_ID)?.let {
-            Ui.addMoreButton(this, btnFav, "s:$it", absorbAnchor = true)
+            Ui.addMoreButton(this, btnFav, "s:$it", absorbAnchor = true, extras = {
+                // Cast: from TMDB when available, else the provider's cast line.
+                val names = seriesCast.ifEmpty { s.cast.split(',', '،', '/').map { n -> n.trim() }.filter { n -> n.length >= 2 }.take(15) }
+                if (names.isEmpty()) emptyList() else listOf(Tr.s("🎭  Cast") to {
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle(Tr.s("🎭  Cast"))
+                        .setItems(names.toTypedArray()) { _, w -> Ui.openActor(this, names[w]) }
+                        .show()
+                })
+            })
         }
         status = findViewById(R.id.status)
 
@@ -129,6 +139,7 @@ class SeriesDetailActivity : AppCompatActivity() {
             val t = com.streambox.tv.data.Tmdb.details(false, extra?.tmdbId ?: "", s.name) ?: return@launch
             if (t.backdrop.isNotBlank()) Ui.backdrop(findViewById(R.id.backdrop), t.backdrop)
             showTrailer(t.trailer)
+            seriesCast = t.cast.map { it.name }.filter { it.isNotBlank() }.take(15)
         }
 
         btnFav.setOnClickListener {
