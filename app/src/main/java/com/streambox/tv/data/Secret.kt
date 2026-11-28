@@ -5,13 +5,12 @@ import java.security.MessageDigest
 
 /** Keeps the built-in login out of plain text and checks the profile password without storing it. */
 object Secret {
-    /** This (sideload) build ships the owner's built-in login; the Play build doesn't. */
-    const val BUILT_IN = true
+    /** No login is built in any more; only a sample provider address for new profiles. */
+    const val BUILT_IN = false
     private val KEY = "StreamBox#2026~tv".toByteArray()
 
-    internal const val DEFAULT_SERVER = "OwAGFVtCbQIQQkQBHFURGUxhREtQ"
-    internal const val DEFAULT_USER = "IBVCU1Ff"
-    internal const val DEFAULT_PASS = "Y0VCU1hUdVZOFgY="
+    /** Provider address filled in as a sample when adding a profile. */
+    internal const val SAMPLE_SERVER = "OwAGFVtCbQIQQkQBHFURGUxhREtQ"
     /** Built-in TMDB key (scrambled); "" = none, then only a key typed in Settings is used. */
     internal const val TMDB_KEY = "MBJBUQdZIF5KFwpVUAYcTUVqFUYHUFQgDEwSAwUBA08="
     private const val PASSWORD_HASH = "a4f78b341e985db84d1dba705c6cfba390e141d17bb9605dbd34696713377cd1"

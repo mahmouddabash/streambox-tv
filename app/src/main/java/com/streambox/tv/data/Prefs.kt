@@ -21,18 +21,10 @@ object Prefs {
             if (sp.getInt("dnsMode", 0) == 0) e.putInt("dnsMode", 12)
             e.apply()
         }
-        seedDefaultProfile(context)
     }
 
-    private val DEFAULT_PROFILE: Profile
-        get() = Profile(
-            id = "default",
-            name = "My IPTV",
-            type = Profile.TYPE_XTREAM,
-            server = Secret.reveal(Secret.DEFAULT_SERVER),
-            username = Secret.reveal(Secret.DEFAULT_USER),
-            password = Secret.reveal(Secret.DEFAULT_PASS)
-        )
+    /** Sample provider address for new profiles (no username or password is built in). */
+    val sampleServer: String get() = try { Secret.reveal(Secret.SAMPLE_SERVER) } catch (_: Exception) { "" }
 
     /** The built-in profile: its login is hidden and it needs the profile password. */
     fun isProtected(p: Profile?) = p?.id == "default"
@@ -41,30 +33,6 @@ object Prefs {
     var protectedUnlocked: Boolean
         get() = sp.getBoolean("protectedUnlocked", false)
         set(v) = sp.edit().putBoolean("protectedUnlocked", v).apply()
-
-    /**
-     * Adds the built-in playlist once per version; deleting it afterwards keeps it deleted.
-     * When the built-in login changes, an existing default profile is updated in place.
-     */
-    private fun seedDefaultProfile(context: Context) {
-        if (!Secret.BUILT_IN) return
-        val version = 2
-        if (sp.getInt("defaultSeedVersion", if (sp.getBoolean("defaultSeeded", false)) 1 else 0) >= version) return
-        val list = profiles()
-        if (list.any { it.id == DEFAULT_PROFILE.id }) {
-            // Cached channels/movies belong to the old server.
-            java.io.File(context.cacheDir, "data_${DEFAULT_PROFILE.id}").deleteRecursively()
-            saveProfiles(list.map {
-                if (it.id == DEFAULT_PROFILE.id)
-                    it.copy(type = DEFAULT_PROFILE.type, server = DEFAULT_PROFILE.server,
-                        username = DEFAULT_PROFILE.username, password = DEFAULT_PROFILE.password)
-                else it
-            })
-        } else {
-            addProfile(DEFAULT_PROFILE)
-        }
-        sp.edit().putBoolean("defaultSeeded", true).putInt("defaultSeedVersion", version).apply()
-    }
 
     // ---------- Profiles ----------
 

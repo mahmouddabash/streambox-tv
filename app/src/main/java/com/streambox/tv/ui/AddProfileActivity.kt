@@ -33,6 +33,8 @@ class AddProfileActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_add_profile)
         findViewById<android.widget.CheckBox>(R.id.useVpn).isChecked = Prefs.vpnOn
+        // Sample provider address; type your own username and password.
+        if (text(R.id.server).isBlank()) setText(R.id.server, Prefs.sampleServer)
         status = findViewById(R.id.status)
         btnSave = findViewById(R.id.btnSave)
 
