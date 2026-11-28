@@ -30,23 +30,10 @@ class NetworkActivity : AppCompatActivity() {
 
     private data class Row(val title: String, val value: String, val action: (() -> Unit)? = null)
 
-    private val vpnPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) {
-        if (com.streambox.tv.data.FreeVpn.permissionIntent(this) == null) startVpn() else toast("The VPN wasn't allowed")
-    }
+    // Same switch as Home and the profile list: it checks the tunnel really answers before keeping it on.
+    private val vpnSwitch = VpnSwitch(this)
 
-    private fun toggleVpn() {
-        if (Prefs.vpnOn) {
-            Prefs.vpnOn = false
-            lifecycleScope.launch(Dispatchers.IO) { com.streambox.tv.data.FreeVpn.stop(this@NetworkActivity) }
-            toast("Free VPN off")
-            refresh()
-            return
-        }
-        val ask = com.streambox.tv.data.FreeVpn.permissionIntent(this)
-        if (ask != null) {
-            try { vpnPermission.launch(ask) } catch (_: Exception) { toast("This TV doesn't allow VPN apps") }
-        } else startVpn()
-    }
+    private fun toggleVpn() = vpnSwitch.toggle { refresh(); quickChecks() }
 
     /** Tests every free VPN entry point and switches to the fastest (also done by itself once a day). */
     private fun fastestVpn() {
@@ -65,17 +52,6 @@ class NetworkActivity : AppCompatActivity() {
         }
     }
 
-    private fun startVpn() {
-        toast("Connecting the free VPN…")
-        lifecycleScope.launch {
-            val ok = withContext(Dispatchers.IO) { com.streambox.tv.data.FreeVpn.start(this@NetworkActivity) }
-            Prefs.vpnOn = ok
-            toast(if (ok) Tr.s("Free VPN on: StreamBox now goes through Cloudflare") else
-                Tr.s("Free VPN failed") + ": " + com.streambox.tv.data.FreeVpn.lastError)
-            refresh()
-            if (ok) quickChecks()
-        }
-    }
 
     private lateinit var adapter: SimpleAdapter<Row>
     private var internet = "Checking…"

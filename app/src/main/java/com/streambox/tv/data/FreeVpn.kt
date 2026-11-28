@@ -51,6 +51,7 @@ object FreeVpn {
     private fun backend(context: Context) = backend ?: GoBackend(context.applicationContext).also { backend = it }
 
     /** Creates the free account (once) and starts the tunnel. Run off the main thread. */
+    @Synchronized
     fun start(context: Context): Boolean {
         return try {
             if (permissionIntent(context) != null) { lastError = "VPN permission not given"; return false }
@@ -73,6 +74,7 @@ object FreeVpn {
         }
     }
 
+    @Synchronized
     fun stop(context: Context) {
         try { backend(context).setState(tunnel, Tunnel.State.DOWN, null) } catch (_: Exception) {}
         state = Tunnel.State.DOWN
@@ -80,6 +82,7 @@ object FreeVpn {
     }
 
     /** Switches to another Cloudflare entry point (when one is slow or blocked). */
+    @Synchronized
     fun nextEndpoint(context: Context): Boolean {
         Prefs.vpnEndpoint = (Prefs.vpnEndpoint + 1) % ENDPOINTS.size
         stop(context)
@@ -112,6 +115,7 @@ object FreeVpn {
      * Tries every entry point through the running tunnel and keeps the fastest working one.
      * Only small test requests are used (nothing is sent to your provider).
      */
+    @Synchronized
     fun pickFastest(context: Context, stopWhenGood: Boolean = true, onProgress: (Int, Int) -> Unit = { _, _ -> }): List<EntryResult> {
         if (!Prefs.vpnOn) return emptyList()
         val out = ArrayList<EntryResult>()
