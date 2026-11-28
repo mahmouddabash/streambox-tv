@@ -176,7 +176,7 @@ class HomeActivity : AppCompatActivity() {
                 .show()
         }
         val vpnBtn = findViewById<Button>(R.id.tileVpn)
-        fun paintVpn() { vpnBtn.alpha = if (Prefs.vpnOn) 1f else 0.55f }
+        fun paintVpn() = vpnSwitch.paint(vpnBtn)
         paintVpn()
         vpnBtn.setOnClickListener { vpnSwitch.toggle { paintVpn(); if (it) load(true) } }
         settings.setOnClickListener { Ui.guardKids(this) { startActivity(Intent(this, SettingsActivity::class.java)) } }
@@ -212,6 +212,7 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        findViewById<Button>(R.id.tileVpn)?.let { vpnSwitch.paint(it) }
         Prefs.lastScreen = Prefs.SCREEN_HOME
     }
 

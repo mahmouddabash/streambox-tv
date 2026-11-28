@@ -16,6 +16,17 @@ class VpnSwitch(private val a: AppCompatActivity) {
         if (FreeVpn.permissionIntent(a) == null) connect() else { toast("The VPN wasn't allowed"); finish(false) }
     }
 
+    /** Green when the VPN is on, red when it's off. */
+    val color: Int get() = if (Prefs.vpnOn) 0xFF2ECC71.toInt() else 0xFFE74C3C.toInt()
+
+    /** Paints a button: its icon (if any) and text in green / red. */
+    fun paint(b: android.widget.TextView) {
+        val c = android.content.res.ColorStateList.valueOf(color)
+        b.setTextColor(c)
+        androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(b, c)
+        b.alpha = 1f
+    }
+
     val label: String get() = Tr.s(if (Prefs.vpnOn) "🛡  Free VPN: on" else "🛡  Free VPN: off")
 
     fun toggle(done: (Boolean) -> Unit = {}) = if (Prefs.vpnOn) turnOff(done) else turnOn(done)

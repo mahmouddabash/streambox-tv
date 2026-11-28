@@ -33,7 +33,8 @@ class ProfilesActivity : AppCompatActivity() {
         btnAdd.setOnClickListener { startActivity(Intent(this, AddProfileActivity::class.java)) }
         val btnVpn = findViewById<android.widget.Button>(R.id.btnVpn)
         btnVpn.text = vpnSwitch.label
-        btnVpn.setOnClickListener { vpnSwitch.toggle { btnVpn.text = vpnSwitch.label } }
+        vpnSwitch.paint(btnVpn)
+        btnVpn.setOnClickListener { vpnSwitch.toggle { btnVpn.text = vpnSwitch.label; vpnSwitch.paint(btnVpn) } }
 
         adapter = SimpleAdapter(
             R.layout.item_two_line,
@@ -55,6 +56,7 @@ class ProfilesActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        findViewById<android.widget.Button>(R.id.btnVpn)?.let { it.text = vpnSwitch.label; vpnSwitch.paint(it) }
         reload()
     }
 
