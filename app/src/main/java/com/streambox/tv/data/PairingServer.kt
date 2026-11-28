@@ -14,7 +14,11 @@ import kotlin.concurrent.thread
  * a phone on the same Wi-Fi opens it, types the provider details, and they arrive in [onSubmit].
  * A random token in the path keeps other devices on the network from posting by accident.
  */
-class PairingServer(private val onSubmit: (Map<String, String>) -> Unit) {
+class PairingServer(
+    private val onSubmit: (Map<String, String>) -> Unit,
+    /** What's on the TV form right now: the phone page opens with the same values. */
+    private val prefill: () -> Map<String, String> = { emptyMap() }
+) {
 
     private var server: ServerSocket? = null
 
@@ -92,7 +96,7 @@ class PairingServer(private val onSubmit: (Map<String, String>) -> Unit) {
                 onSubmit(form)
                 respond(client, 200, page("Sent to your TV", "<p>Check the TV screen: it is signing in now.</p><p><a href=\"/$token\">Send again</a></p>"))
             } else {
-                respond(client, 200, formPage())
+                respond(client, 200, formPage(try { prefill() } catch (_: Exception) { emptyMap() }))
             }
         } catch (_: Exception) {
         } finally {
@@ -150,23 +154,25 @@ button{width:100%;margin-top:20px;padding:14px;font-size:17px;font-weight:600;bo
 a{color:#2f9bff;} p{color:#9aa7bd;line-height:1.5;}
 </style></head><body><div class="card"><h1>$title</h1>$body</div></body></html>"""
 
-    private fun formPage(): String = page(
+    private fun esc(s: String?) = (s ?: "").replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+
+    private fun formPage(v: Map<String, String>): String = page(
         "Add a profile to your TV",
         """<form method="post" action="/$token" autocomplete="off">
 <label>Type</label>
 <select name="type" id="type" onchange="sw()">
-<option value="xtream">Xtream Codes login</option>
-<option value="m3u">M3U playlist URL</option>
+<option value="xtream"${if (v["type"] != "m3u") " selected" else ""}>Xtream Codes login</option>
+<option value="m3u"${if (v["type"] == "m3u") " selected" else ""}>M3U playlist URL</option>
 </select>
-<label>Profile name (optional)</label><input name="name">
-<div id="x">
-<label>Server URL</label><input name="server" inputmode="url" autocapitalize="none" placeholder="http://example.com:8080">
-<label>Username</label><input name="username" autocapitalize="none" autocorrect="off">
-<label>Password</label><input name="password" autocapitalize="none" autocorrect="off">
+<label>Profile name (optional)</label><input name="name" value="${esc(v["name"])}">
+<div id="x"${if (v["type"] == "m3u") " style=\"display:none\"" else ""}>
+<label>Server URL</label><input name="server" inputmode="url" autocapitalize="none" placeholder="http://example.com:8080" value="${esc(v["server"])}">
+<label>Username</label><input name="username" autocapitalize="none" autocorrect="off" value="${esc(v["username"])}">
+<label>Password</label><input name="password" autocapitalize="none" autocorrect="off" value="${esc(v["password"])}">
 </div>
-<div id="m" style="display:none">
-<label>Playlist URL</label><input name="m3u" inputmode="url" autocapitalize="none" placeholder="http://...m3u">
-<label>EPG URL (optional)</label><input name="epg" inputmode="url" autocapitalize="none">
+<div id="m"${if (v["type"] == "m3u") "" else " style=\"display:none\""}>
+<label>Playlist URL</label><input name="m3u" inputmode="url" autocapitalize="none" placeholder="http://...m3u" value="${esc(v["m3u"])}">
+<label>EPG URL (optional)</label><input name="epg" inputmode="url" autocapitalize="none" value="${esc(v["epg"])}">
 </div>
 <button type="submit">Send to TV</button>
 </form>

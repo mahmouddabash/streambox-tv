@@ -73,7 +73,7 @@ class AddProfileActivity : AppCompatActivity() {
     private fun startPairing() {
         val image = findViewById<ImageView>(R.id.qrImage)
         val help = findViewById<TextView>(R.id.qrHelp)
-        val server = PairingServer { form -> runOnUiThread { onPhoneDetails(form) } }
+        val server = PairingServer(onSubmit = { form -> runOnUiThread { onPhoneDetails(form) } }, prefill = { formSnapshot() })
         val url = server.start()
         val qr = if (url != null) Qr.bitmap(url) else null
         if (url == null || qr == null) {
@@ -92,18 +92,44 @@ class AddProfileActivity : AppCompatActivity() {
         findViewById<EditText>(id).setText(value ?: "")
     }
 
+    /** The TV form's current values (read on the screen's thread), for the phone page. */
+    private fun formSnapshot(): Map<String, String> {
+        val out = HashMap<String, String>()
+        val done = java.util.concurrent.CountDownLatch(1)
+        runOnUiThread {
+            try {
+                out["type"] = if (findViewById<View>(R.id.m3uFields).visibility == View.VISIBLE) "m3u" else "xtream"
+                out["name"] = text(R.id.name)
+                out["server"] = text(R.id.server)
+                out["username"] = text(R.id.username)
+                out["password"] = text(R.id.password)
+                out["m3u"] = text(R.id.m3uUrl)
+                out["epg"] = text(R.id.epgUrl)
+            } catch (_: Exception) {
+            }
+            done.countDown()
+        }
+        done.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        return out
+    }
+
+    /** Fills in what the phone sent; a field left empty on the phone keeps what's on the TV. */
+    private fun keepOrSet(id: Int, value: String?) {
+        if (!value.isNullOrBlank()) setText(id, value.trim())
+    }
+
     private fun onPhoneDetails(form: Map<String, String>) {
         if (saving || isFinishing) return
         val isXtream = form["type"] != "m3u"
         showTab(isXtream)
-        setText(R.id.name, form["name"])
+        keepOrSet(R.id.name, form["name"])
         if (isXtream) {
-            setText(R.id.server, form["server"])
-            setText(R.id.username, form["username"])
-            setText(R.id.password, form["password"])
+            keepOrSet(R.id.server, form["server"])
+            keepOrSet(R.id.username, form["username"])
+            keepOrSet(R.id.password, form["password"])
         } else {
-            setText(R.id.m3uUrl, form["m3u"])
-            setText(R.id.epgUrl, form["epg"])
+            keepOrSet(R.id.m3uUrl, form["m3u"])
+            keepOrSet(R.id.epgUrl, form["epg"])
         }
         toast("Details received from your phone")
         save()
