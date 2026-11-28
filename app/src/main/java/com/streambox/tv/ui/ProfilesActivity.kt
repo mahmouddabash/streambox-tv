@@ -62,6 +62,11 @@ class ProfilesActivity : AppCompatActivity() {
         val profiles = Prefs.profiles()
         adapter.submit(profiles)
         empty.visibility = if (profiles.isEmpty()) View.VISIBLE else View.GONE
+        // Saved profiles that couldn't be read this time: say so (they are kept), and try again shortly.
+        if (Prefs.profilesUnreadable) {
+            empty.text = Tr.s("Your saved profiles couldn't be opened just now. They are kept safe — trying again…")
+            empty.postDelayed({ if (!isFinishing) reload() }, 2_000)
+        } else empty.text = Tr.s("No profiles yet. Add your provider's Xtream Codes login or an M3U playlist URL to begin.")
         if (profiles.isEmpty()) btnAdd.requestFocus()
     }
 

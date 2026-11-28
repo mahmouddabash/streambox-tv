@@ -44,9 +44,24 @@ object Prefs {
      * Profiles JSON. Logins are only ever stored encrypted; a plain-text copy left by an old build
      * is encrypted on first read and then deleted.
      */
+    /** Saved profiles exist but couldn't be read this time (e.g. the TV was short of memory). */
+    @Volatile
+    var profilesUnreadable = false
+        private set
+
     private fun profilesJson(): String {
         val enc = sp.getString("profiles_enc", null)
-        if (enc != null) Vault.decrypt(enc)?.let { return it }
+        if (enc != null) {
+            // A hiccup reading the TV's key store must never look like "no profiles": try again,
+            // then fall back to the last good copy.
+            for (attempt in 0 until 3) {
+                Vault.decrypt(enc)?.let { profilesUnreadable = false; return it }
+                try { Thread.sleep(150) } catch (_: InterruptedException) {}
+            }
+            sp.getString("profiles_enc_bak", null)?.let { b -> Vault.decrypt(b)?.let { profilesUnreadable = false; return it } }
+            profilesUnreadable = true
+            return "[]"
+        }
         val plain = sp.getString("profiles", null) ?: return "[]"
         Vault.encryptOrRepair(plain)?.let { sp.edit().putString("profiles_enc", it).remove("profiles").apply() }
             ?: sp.edit().remove("profiles").apply()
@@ -78,13 +93,18 @@ object Prefs {
                     )
                 )
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
+            profilesUnreadable = true
         }
-        profileCache = out
+        // Don't remember a failed read: the next call tries again.
+        if (!profilesUnreadable) profileCache = out
         return out
     }
 
     private fun saveProfiles(list: List<Profile>) {
+        // Never overwrite saved profiles that couldn't be read: keep them as a backup to recover from.
+        if (profilesUnreadable) sp.getString("profiles_enc", null)?.let { sp.edit().putString("profiles_enc_bak", it).commit() }
+        else sp.getString("profiles_enc", null)?.let { sp.edit().putString("profiles_enc_bak", it).apply() }
         val arr = JSONArray()
         for (p in list) {
             arr.put(

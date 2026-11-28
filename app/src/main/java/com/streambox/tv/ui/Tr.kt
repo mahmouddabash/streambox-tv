@@ -756,6 +756,7 @@ object Tr {
         "This channel can't go back" to "لا يمكن الرجوع في هذه القناة",
         "Back to live in the menu" to "العودة للبث المباشر من القائمة",
         "Skip intro" to "تخطي المقدمة",
+        "Your saved profiles couldn't be opened just now. They are kept safe — trying again…" to "تعذّر فتح ملفاتك المحفوظة الآن. إنها محفوظة بأمان — جارٍ المحاولة مرة أخرى…",
         "⬇  Download again" to "⬇  تنزيل مرة أخرى",
         "Finding films and series with {}…" to "جارٍ البحث عن أفلام ومسلسلات {}…",
         "More series with {}" to "مسلسلات أخرى مع {}",
