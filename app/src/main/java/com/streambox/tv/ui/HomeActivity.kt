@@ -25,7 +25,9 @@ import com.streambox.tv.data.Prefs
 import com.streambox.tv.data.Profile
 import com.streambox.tv.data.Repo
 import com.streambox.tv.data.Series
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -424,7 +426,50 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
+    private var rowsGen = 0
+
+    /**
+     * First load: the quick rows (continue watching, recent channels, downloads) show at once and the
+     * rest (recommendations, new this week, favourites…) are worked out in the background and added
+     * below while you move. Later rebuilds swap the whole list in one go, as before.
+     */
     private fun buildRows() {
+        val gen = ++rowsGen
+        if (rows.isNotEmpty()) {
+            val q = quickRows()
+            val all = q + slowRows(q)
+            rows = all
+            rowsView.adapter?.notifyDataSetChanged()
+            ChannelWidget.save(this, Repo.favouriteChannels(6))
+            return
+        }
+        val first = quickRows()
+        rows = first
+        rowsView.adapter?.notifyDataSetChanged()
+        lifecycleScope.launch {
+            val rest = try { withContext(Dispatchers.Default) { slowRows(first) } } catch (_: Exception) { emptyList() }
+            if (gen != rowsGen || rest.isEmpty()) return@launch
+            val start = rows.size
+            rows = rows + rest
+            rowsView.adapter?.notifyItemRangeInserted(start, rest.size)
+            if (start == 0) restoreFocus()
+            ChannelWidget.save(this@HomeActivity, Repo.favouriteChannels(6))
+        }
+    }
+
+    private fun movieCardOf(m: Movie, withProgress: Boolean = false): Card {
+        val pr = if (withProgress) {
+            val key = "vod_${Repo.userKey}_${m.id}"
+            val pos = Prefs.position(key)
+            val dur = Prefs.duration(key)
+            if (dur > 0) (pos * 1000 / dur).toInt().coerceIn(30, 1000)
+            else (pos / 60_000L * 9).toInt().coerceIn(60, 900)
+        } else -1
+        return Card(Kind.MOVIE, m.id, m.name, m.poster, rating(m.rating), pr)
+    }
+
+    /** Rows that are quick to work out (shown first). */
+    private fun quickRows(): List<Row> {
         val out = ArrayList<Row>()
         fun movieCard(m: Movie, withProgress: Boolean = false): Card {
             val pr = if (withProgress) {
@@ -462,6 +507,15 @@ class HomeActivity : AppCompatActivity() {
                 .takeIf { it.isNotEmpty() }
                 ?.let { list -> out.add(Row("Downloaded", list.map { Card(Kind.DOWNLOAD, it.id, it.title, it.poster, "⬇") })) }
         }
+        return out
+    }
+
+    /** Rows that take longer (recommendations, scans of the whole catalogue): safe off the main thread. */
+    private fun slowRows(quick: List<Row>): List<Row> {
+        val out = ArrayList<Row>()
+        fun movieCard(m: Movie, withProgress: Boolean = false) = movieCardOf(m, withProgress)
+        fun seriesCard(s: Series) = Card(Kind.SERIES, s.id, s.name, s.poster, rating(s.rating))
+        fun channelCard(c: Channel) = Card(Kind.CHANNEL, c.id, c.name, c.logo)
         Repo.becauseYouWatchedMovie()?.let { (m, list) -> out.add(Row("Because you watched ${m.name}", list.map { movieCard(it) })) }
         Repo.becauseYouWatchedSeries()?.let { (s, list) -> out.add(Row("Because you watched ${s.name}", list.map(::seriesCard))) }
         trending?.takeIf { it.isNotEmpty() }?.let { list ->
@@ -483,15 +537,13 @@ class HomeActivity : AppCompatActivity() {
                 if (Prefs.numberKeysFavourites && i < 99) Card(Kind.CHANNEL, c.id, "${i + 1} · ${c.name}", c.logo) else channelCard(c)
             }))
         }
-        ChannelWidget.save(this, Repo.favouriteChannels(6))
         Repo.moviesIn(Repo.CAT_FAV).take(30).takeIf { it.isNotEmpty() }
             ?.let { out.add(Row("My list", it.map { m -> movieCard(m) })) }
-        if (out.none { r -> r.cards.any { it.kind == Kind.CHANNEL } }) {
+        if ((quick + out).none { r -> r.cards.any { it.kind == Kind.CHANNEL } }) {
             Repo.channelsIn(Repo.CAT_ALL).take(30).takeIf { it.isNotEmpty() }
                 ?.let { out.add(Row("Live channels", it.map(::channelCard))) }
         }
-        rows = out
-        rowsView.adapter?.notifyDataSetChanged()
+        return out
     }
 
     private fun rating(r: String): String {

@@ -756,6 +756,7 @@ object Tr {
         "This channel can't go back" to "لا يمكن الرجوع في هذه القناة",
         "Back to live in the menu" to "العودة للبث المباشر من القائمة",
         "Skip intro" to "تخطي المقدمة",
+        "⬇  Download again" to "⬇  تنزيل مرة أخرى",
         "Finding films and series with {}…" to "جارٍ البحث عن أفلام ومسلسلات {}…",
         "More series with {}" to "مسلسلات أخرى مع {}",
         "No films or series with {} at your provider" to "لا توجد أفلام أو مسلسلات لـ {} لدى مزوّدك",

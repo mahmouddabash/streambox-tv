@@ -131,7 +131,13 @@ object Downloads {
     /** Where new downloads are saved (Settings → Download location). Existing ones stay where they are. */
     fun dir(context: Context): File {
         val all = dirs(context)
-        val d = all.getOrNull(Prefs.downloadStorage) ?: all.firstOrNull() ?: File(context.filesDir, "Downloads")
+        // A USB drive that was unplugged (or is read-only) falls back to the TV's own storage.
+        fun usable(f: File) = try {
+            android.os.Environment.getExternalStorageState(f.parentFile ?: f) == android.os.Environment.MEDIA_MOUNTED &&
+                (f.isDirectory || f.mkdirs()) && f.canWrite()
+        } catch (_: Exception) { false }
+        val d = all.getOrNull(Prefs.downloadStorage)?.takeIf { usable(it) }
+            ?: all.firstOrNull { usable(it) } ?: File(context.filesDir, "Downloads")
         return d.apply { mkdirs() }
     }
 
@@ -175,6 +181,16 @@ object Downloads {
 
     fun resume(context: Context, id: String) {
         update(id) { it.copy(status = QUEUED, note = "") }
+        DownloadService.start(context)
+    }
+
+    /** The file is gone (drive unplugged / deleted): download it again into the current download folder. */
+    fun redownload(context: Context, id: String) {
+        val item = get(id) ?: return
+        companions(item.file).forEach { try { File(it).delete() } catch (_: Exception) {} }
+        progress.remove(id)
+        val target = File(dir(context), File(item.file).name).path
+        update(id) { it.copy(status = QUEUED, note = "", file = target) }
         DownloadService.start(context)
     }
 

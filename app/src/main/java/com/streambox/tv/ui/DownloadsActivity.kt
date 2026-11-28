@@ -175,6 +175,11 @@ class DownloadsActivity : AppCompatActivity() {
         if (d.status == Downloads.DONE && file.exists()) actions.add("▶  Play" to {
             Ui.play(this, listOf(PlayItem(d.key, d.title, Downloads.playUri(file), false)), 0)
         })
+        // Finished but the file is gone (USB drive unplugged, or deleted elsewhere).
+        if (d.status == Downloads.DONE && !file.exists()) {
+            toast("The file is missing (USB drive unplugged?)")
+            actions.add("⬇  Download again" to { Downloads.redownload(this, d.id); reload() })
+        }
         when (d.status) {
             Downloads.RUNNING, Downloads.QUEUED -> actions.add("⏸  Pause" to { Downloads.pause(this, d.id); reload() })
             Downloads.PAUSED -> actions.add("⬇  Resume download" to { Downloads.resume(this, d.id); reload() })
