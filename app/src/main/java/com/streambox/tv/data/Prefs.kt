@@ -668,6 +668,11 @@ object Prefs {
     var vpnPeerKey: String
         get() = sp.getString("vpnPeer", "") ?: ""
         set(v) = sp.edit().putString("vpnPeer", v).apply()
+    /** Turn the free VPN back on when the app starts (off = the VPN always starts off). */
+    var vpnAtStart: Boolean
+        get() = sp.getBoolean("vpnAtStart", false)
+        set(v) = sp.edit().putBoolean("vpnAtStart", v).apply()
+
     var vpnPickedAt: Long
         get() = sp.getLong("vpnPicked", 0L)
         set(v) = sp.edit().putLong("vpnPicked", v).apply()

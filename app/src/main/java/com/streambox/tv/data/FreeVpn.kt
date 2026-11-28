@@ -153,6 +153,8 @@ object FreeVpn {
      */
     fun autoStart(context: Context) {
         try {
+            // By default every start is without the VPN; it's switched on only when you choose it.
+            if (!Prefs.vpnAtStart) Prefs.vpnOn = false
             if (!Prefs.vpnOn) return
             if (!start(context)) { Prefs.vpnOn = false; return }
             // Check before the app goes on; if this entry point doesn't answer, look for another now.

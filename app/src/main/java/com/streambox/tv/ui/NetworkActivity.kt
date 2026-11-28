@@ -139,6 +139,10 @@ class NetworkActivity : AppCompatActivity() {
             vpn.lastError.isNotEmpty() -> Tr.s("Off") + "   •   " + Tr.s("last problem") + ": " + Tr.s(vpn.lastError)
             else -> Tr.s("Off   •   use it when your provider blocks your home internet (HTTP 403)")
         }) { toggleVpn() })
+        rows.add(Row("Free VPN when the app starts", Tr.s(if (Prefs.vpnAtStart) "On: turns back on by itself" else "Off: the app always starts without the VPN")) {
+            Prefs.vpnAtStart = !Prefs.vpnAtStart
+            refresh()
+        })
         if (Prefs.vpnOn) rows.add(Row("Free VPN entry point", vpn.ENDPOINTS[Prefs.vpnEndpoint.coerceIn(0, vpn.ENDPOINTS.size - 1)] +
             "   •   " + Tr.s("OK = test all and use the fastest")) { fastestVpn() })
         rows.add(Row("DNS", dnsNames[Prefs.dnsMode.coerceIn(0, Net.dnsChoices.size - 1)] + "   •   " + dns) { chooseDns() })
